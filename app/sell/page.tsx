@@ -13,17 +13,20 @@ import {
   MapPin, 
   Phone, 
   HelpCircle,
-  ExternalLink 
+  ExternalLink,
+  Eye 
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { CATEGORIES, CONDITIONS } from '@/lib/constants';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { ImageUploader, ImageItem } from '@/components/listings/ImageUploader';
 import { uploadListingImage } from '@/lib/supabase/storage';
 import { createListing } from '@/lib/data/listings';
 import { moderateListingContent } from '@/lib/moderation';
 import { checkListingSpam, recordListingSubmission } from '@/lib/security/rate-limit';
 import { CategorySlug, ItemCondition } from '@/types';
+import { formatPrice } from '@/lib/utils';
 
 export default function SellPage() {
   const router = useRouter();
@@ -34,10 +37,12 @@ export default function SellPage() {
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [category, setCategory] = useState<CategorySlug>('electronics');
+  const [subcategory, setSubcategory] = useState('');
   const [condition, setCondition] = useState<ItemCondition>('Like New');
   const [location, setLocation] = useState('');
   const [phone, setPhone] = useState('');
   const [agreedToRules, setAgreedToRules] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -159,6 +164,7 @@ export default function SellPage() {
           description: description.trim(),
           price: parseFloat(price),
           category,
+          subcategory: subcategory || null,
           condition,
           location: location.trim(),
           phone: phone.trim(),
@@ -291,20 +297,41 @@ export default function SellPage() {
             )}
           </div>
 
-          {/* Category & Condition Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Category, Subcategory & Condition Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
                 Category <span className="text-rose-500">*</span>
               </label>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value as CategorySlug)}
+                onChange={(e) => {
+                  setCategory(e.target.value as CategorySlug);
+                  setSubcategory('');
+                }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 {CATEGORIES.map((cat) => (
                   <option key={cat.id} value={cat.id}>
                     {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
+                Subcategory
+              </label>
+              <select
+                value={subcategory}
+                onChange={(e) => setSubcategory(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">Select (Optional)</option>
+                {(CATEGORIES.find((c) => c.id === category)?.subcategories || []).map((sub, idx) => (
+                  <option key={idx} value={sub}>
+                    {sub}
                   </option>
                 ))}
               </select>
@@ -458,24 +485,117 @@ export default function SellPage() {
           )}
         </div>
 
-        {/* Submit Button */}
+        {/* Submit & Preview Buttons */}
         <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-slate-400 text-center sm:text-left">
             Items pass through automated moderation before public indexation.
           </p>
 
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            isLoading={isSubmitting}
-            className="w-full sm:w-auto px-8 font-bold"
-          >
-            Publish Listing
-          </Button>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              onClick={() => {
+                if (validate()) {
+                  setShowPreviewModal(true);
+                }
+              }}
+              className="w-full sm:w-auto px-6 font-semibold"
+            >
+              <Eye className="w-4 h-4 mr-1.5" />
+              Preview Listing
+            </Button>
+
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              isLoading={isSubmitting}
+              className="w-full sm:w-auto px-8 font-bold"
+            >
+              Publish Listing
+            </Button>
+          </div>
         </div>
 
       </form>
+
+      {/* Listing Preview Modal */}
+      <Modal
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        title="Listing Preview"
+        description="Verify how your listing will appear to buyers across Bazaar."
+        maxWidth="2xl"
+      >
+        <div className="space-y-4">
+          {images.length > 0 && (
+            <div className="aspect-16/9 relative rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={images[0].previewUrl}
+                alt={title || 'Item Preview'}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
+
+          <div>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-2xl font-black text-slate-900">
+                {formatPrice(parseFloat(price) || 0)}
+              </span>
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
+                  {condition}
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 capitalize">
+                  {category.replace('-', ' ')}
+                </span>
+                {subcategory && (
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                    {subcategory}
+                  </span>
+                )}
+              </div>
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mt-1">{title}</h3>
+          </div>
+
+          <div className="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100 whitespace-pre-line max-h-36 overflow-y-auto">
+            {description}
+          </div>
+
+          <div className="text-xs text-slate-500 pt-2 border-t border-slate-100 flex items-center justify-between">
+            <span>Location: <strong>{location}</strong></span>
+            <span>Contact Phone: <strong>{phone}</strong></span>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPreviewModal(false)}
+            >
+              Back to Editing
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              isLoading={isSubmitting}
+              onClick={(e) => {
+                setShowPreviewModal(false);
+                handleSubmit(e as any);
+              }}
+            >
+              Looks Great, Publish Now
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

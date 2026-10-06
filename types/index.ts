@@ -17,6 +17,7 @@ export interface Category {
   name: string;
   icon: string;
   description: string;
+  subcategories?: string[];
   count?: number;
 }
 
@@ -62,6 +63,7 @@ export interface Listing {
   description: string;
   price: number;
   category: CategorySlug;
+  subcategory?: string | null;
   condition: ItemCondition;
   location: string;
   phone?: string | null;
@@ -87,13 +89,16 @@ export interface Favorite {
 }
 
 export type ReportReason =
+  | 'Scam or fraud'
+  | 'Fake listing'
   | 'Prohibited item'
   | 'Illegal item'
-  | 'Inappropriate content'
-  | 'Scam or fraud'
   | 'Counterfeit item'
-  | 'Misleading information'
   | 'Dangerous item'
+  | 'Stolen item'
+  | 'Misleading information'
+  | 'Inappropriate content'
+  | 'Suspicious seller'
   | 'Other';
 
 export interface Report {
@@ -111,12 +116,25 @@ export interface Report {
 export interface FilterOptions {
   query?: string;
   category?: string;
+  subcategory?: string;
   minPrice?: number;
   maxPrice?: number;
   condition?: string;
   location?: string;
-  sortBy?: 'newest' | 'price-asc' | 'price-desc' | 'popular';
+  sellerId?: string;
+  excludeId?: string;
+  sortBy?: 'newest' | 'oldest' | 'price-asc' | 'price-desc' | 'popular';
   includePending?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PaginatedListings {
+  items: ListingWithDetails[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface ModerationResult {
@@ -124,4 +142,58 @@ export interface ModerationResult {
   score: number; // 0 - 100 risk score
   publicMessage: string;
   internalFlags: string[];
+}
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  content: string;
+  is_read: boolean;
+  created_at: string;
+  sender?: Profile | null;
+}
+
+export interface Conversation {
+  id: string;
+  listing_id?: string | null;
+  buyer_id: string;
+  seller_id: string;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string;
+}
+
+export interface ConversationWithDetails extends Conversation {
+  listing?: ListingWithDetails | null;
+  buyer?: Profile | null;
+  seller?: Profile | null;
+  last_message?: Message | null;
+  unread_count: number;
+}
+
+export interface RecentlyViewedItem {
+  id: string;
+  user_id?: string;
+  listing_id: string;
+  viewed_at: string;
+  listing?: ListingWithDetails | null;
+}
+
+export interface NotificationItem {
+  id: string;
+  user_id: string;
+  type: 'new_message' | 'price_drop' | 'listing_approved' | 'listing_rejected' | 'item_sold' | 'system';
+  title: string;
+  message: string;
+  link?: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface UserBlock {
+  id: string;
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
 }

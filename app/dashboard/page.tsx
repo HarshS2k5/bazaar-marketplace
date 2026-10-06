@@ -20,7 +20,8 @@ import {
   ShieldCheck,
   XCircle,
   Phone,
-  User
+  User,
+  MessageSquare
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getSellerListings, deleteListing, updateListing } from '@/lib/data/listings';
@@ -140,17 +141,31 @@ function DashboardContent() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {user && (
+            <Link href={`/seller/${user.id}`} target="_blank">
+              <Button variant="outline" size="md" className="rounded-xl border-slate-300">
+                <ExternalLink className="w-4 h-4 text-slate-500" />
+                <span>Public Profile</span>
+              </Button>
+            </Link>
+          )}
+          <Link href="/messages">
+            <Button variant="outline" size="md" className="rounded-xl border-slate-300">
+              <MessageSquare className="w-4 h-4 text-indigo-500" />
+              <span>Messages</span>
+            </Button>
+          </Link>
           <Link href="/profile">
             <Button variant="outline" size="md" className="rounded-xl border-slate-300">
               <User className="w-4 h-4 text-slate-500" />
-              <span>Customer Profile</span>
+              <span>Profile</span>
             </Button>
           </Link>
           <Link href="/sell">
             <Button variant="primary" size="md" className="rounded-xl shadow-sm bg-emerald-600 hover:bg-emerald-700">
               <PlusCircle className="w-4 h-4" />
-              <span>Create New Ad</span>
+              <span>Create Ad</span>
             </Button>
           </Link>
         </div>

@@ -1,6 +1,7 @@
-import { FilterOptions, ListingWithDetails, Profile, Report, ListingStatus } from '@/types';
+import { FilterOptions, ListingWithDetails, Profile, Report, ListingStatus, PaginatedListings } from '@/types';
 import { INITIAL_LISTINGS } from './mock-data';
 import { createClient as createBrowserSupabase } from '@/lib/supabase/client';
+import { POPULAR_SEARCH_TERMS } from '@/lib/constants';
 
 export function isSupabaseConfigured(): boolean {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -107,8 +108,17 @@ export async function getListings(filters: FilterOptions = {}): Promise<ListingW
       if (filters.category) {
         query = query.eq('category', filters.category);
       }
+      if (filters.subcategory) {
+        query = query.eq('subcategory', filters.subcategory);
+      }
       if (filters.condition) {
         query = query.eq('condition', filters.condition);
+      }
+      if (filters.sellerId) {
+        query = query.eq('seller_id', filters.sellerId);
+      }
+      if (filters.excludeId) {
+        query = query.neq('id', filters.excludeId);
       }
       if (filters.minPrice !== undefined && filters.minPrice > 0) {
         query = query.gte('price', filters.minPrice);
@@ -130,6 +140,8 @@ export async function getListings(filters: FilterOptions = {}): Promise<ListingW
         query = query.order('price', { ascending: false });
       } else if (filters.sortBy === 'popular') {
         query = query.order('views', { ascending: false });
+      } else if (filters.sortBy === 'oldest') {
+        query = query.order('created_at', { ascending: true });
       } else {
         query = query.order('created_at', { ascending: false });
       }
@@ -156,8 +168,17 @@ export async function getListings(filters: FilterOptions = {}): Promise<ListingW
   if (filters.category) {
     results = results.filter((item) => item.category === filters.category);
   }
+  if (filters.subcategory) {
+    results = results.filter((item) => item.subcategory === filters.subcategory);
+  }
   if (filters.condition) {
     results = results.filter((item) => item.condition === filters.condition);
+  }
+  if (filters.sellerId) {
+    results = results.filter((item) => item.seller_id === filters.sellerId);
+  }
+  if (filters.excludeId) {
+    results = results.filter((item) => item.id !== filters.excludeId);
   }
   if (filters.minPrice !== undefined && filters.minPrice > 0) {
     results = results.filter((item) => item.price >= (filters.minPrice || 0));
@@ -187,11 +208,160 @@ export async function getListings(filters: FilterOptions = {}): Promise<ListingW
     results.sort((a, b) => b.price - a.price);
   } else if (filters.sortBy === 'popular') {
     results.sort((a, b) => b.views - a.views);
+  } else if (filters.sortBy === 'oldest') {
+    results.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   } else {
     results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
   return results.filter((item) => !isDemoListing(item)).map(normalizeListing);
+}
+
+/**
+ * Fetch paginated listings with exact count from database
+ */
+export async function getPaginatedListings(filters: FilterOptions = {}): Promise<PaginatedListings> {
+  const page = Math.max(1, filters.page || 1);
+  const pageSize = Math.max(1, filters.pageSize || 12);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createBrowserSupabase();
+      let query = supabase
+        .from('listings')
+        .select(`
+          *,
+          seller:profiles!seller_id(*),
+          images:listing_images(*)
+        `, { count: 'exact' });
+
+      if (filters.includePending) {
+        query = query.eq('status', 'pending');
+      } else {
+        query = query.in('status', ['active', 'approved']);
+      }
+
+      if (filters.category) {
+        query = query.eq('category', filters.category);
+      }
+      if (filters.subcategory) {
+        query = query.eq('subcategory', filters.subcategory);
+      }
+      if (filters.condition) {
+        query = query.eq('condition', filters.condition);
+      }
+      if (filters.sellerId) {
+        query = query.eq('seller_id', filters.sellerId);
+      }
+      if (filters.excludeId) {
+        query = query.neq('id', filters.excludeId);
+      }
+      if (filters.minPrice !== undefined && filters.minPrice > 0) {
+        query = query.gte('price', filters.minPrice);
+      }
+      if (filters.maxPrice !== undefined && filters.maxPrice > 0) {
+        query = query.lte('price', filters.maxPrice);
+      }
+      if (filters.location) {
+        query = query.ilike('location', `%${filters.location}%`);
+      }
+      if (filters.query) {
+        query = query.or(`title.ilike.%${filters.query}%,description.ilike.%${filters.query}%,location.ilike.%${filters.query}%`);
+      }
+
+      // Sort
+      if (filters.sortBy === 'price-asc') {
+        query = query.order('price', { ascending: true });
+      } else if (filters.sortBy === 'price-desc') {
+        query = query.order('price', { ascending: false });
+      } else if (filters.sortBy === 'popular') {
+        query = query.order('views', { ascending: false });
+      } else if (filters.sortBy === 'oldest') {
+        query = query.order('created_at', { ascending: true });
+      } else {
+        query = query.order('created_at', { ascending: false });
+      }
+
+      query = query.range(from, to);
+
+      const { data, count, error } = await query;
+      if (!error && data) {
+        const cleaned = (data as any[]).filter((item) => !isDemoListing(item)).map(normalizeListing);
+        const total = count !== null && count !== undefined ? count : cleaned.length;
+        return {
+          items: cleaned,
+          total,
+          page,
+          pageSize,
+          totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        };
+      }
+    } catch (e) {
+      console.warn('Supabase getPaginatedListings error:', e);
+    }
+  }
+
+  // Fallback pagination
+  const allListings = await getListings(filters);
+  const total = allListings.length;
+  const paginatedItems = allListings.slice(from, from + pageSize);
+
+  return {
+    items: paginatedItems,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  };
+}
+
+/**
+ * Fetch search auto-suggestions
+ */
+export async function getSearchSuggestions(query: string): Promise<string[]> {
+  const cleanQ = query.trim().toLowerCase();
+  if (!cleanQ || cleanQ.length < 2) return [];
+
+  const suggestions = new Set<string>();
+
+  // Check popular search terms
+  for (const term of POPULAR_SEARCH_TERMS) {
+    if (term.toLowerCase().includes(cleanQ)) {
+      suggestions.add(term);
+    }
+  }
+
+  // Query database listings titles if Supabase is configured
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createBrowserSupabase();
+      const { data } = await supabase
+        .from('listings')
+        .select('title')
+        .in('status', ['active', 'approved'])
+        .ilike('title', `%${cleanQ}%`)
+        .limit(10);
+
+      if (data) {
+        for (const row of data) {
+          if (row.title) {
+            suggestions.add(row.title);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Check fallback listings
+  for (const item of fallbackListings) {
+    if (item.title.toLowerCase().includes(cleanQ)) {
+      suggestions.add(item.title);
+    }
+  }
+
+  return Array.from(suggestions).slice(0, 8);
 }
 
 /**
@@ -314,6 +484,7 @@ export async function createListing(
           description: listingData.description,
           price: listingData.price,
           category: listingData.category,
+          subcategory: listingData.subcategory || null,
           condition: listingData.condition,
           location: listingData.location,
           phone: listingData.phone,
@@ -409,6 +580,7 @@ export async function updateListing(
         description: updateData.description,
         price: updateData.price,
         category: updateData.category,
+        subcategory: updateData.subcategory !== undefined ? updateData.subcategory : undefined,
         condition: updateData.condition,
         location: updateData.location,
         phone: updateData.phone,
@@ -578,6 +750,42 @@ export async function getUsersList(): Promise<Profile[]> {
     seen.add(u.id);
     return true;
   });
+}
+
+export async function getPublicSellerProfile(sellerId: string): Promise<Profile | null> {
+  if (!sellerId || DEMO_SEED_IDS.has(sellerId)) return null;
+
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createBrowserSupabase();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, name, phone, location, bio, avatar_url, role, is_suspended, created_at')
+        .eq('id', sellerId)
+        .maybeSingle();
+
+      if (!error && data) {
+        if (data.is_suspended) return null;
+        return {
+          ...data,
+          email: '', // Privacy safeguard: public seller profiles never reveal email address
+        } as Profile;
+      }
+    } catch (e) {
+      console.warn('Supabase getPublicSellerProfile error:', e);
+    }
+  }
+
+  // Fallback
+  const users = await getUsersList();
+  const found = users.find((u) => u.id === sellerId);
+  if (found && !found.is_suspended) {
+    return {
+      ...found,
+      email: '', // Never expose email
+    };
+  }
+  return null;
 }
 
 export async function setUserSuspension(userId: string, isSuspended: boolean): Promise<boolean> {

@@ -14,7 +14,8 @@ import {
   ArrowLeft,
   ChevronRight,
   Phone,
-  PhoneOff
+  PhoneOff,
+  MessageSquare
 } from 'lucide-react';
 import { getListingById, getListings } from '@/lib/data/listings';
 import { formatPrice, formatDate, formatPhone } from '@/lib/utils';
@@ -23,6 +24,7 @@ import { CallSellerButton } from '@/components/listings/CallSellerButton';
 import { FavoriteButton } from '@/components/listings/FavoriteButton';
 import { ReportModal } from '@/components/listings/ReportModal';
 import { ShareButton } from '@/components/listings/ShareButton';
+import { TrackRecentlyViewed } from '@/components/listings/TrackRecentlyViewed';
 import { Badge } from '@/components/ui/Badge';
 import { ListingCard } from '@/components/listings/ListingCard';
 
@@ -84,6 +86,9 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
         <span className="text-slate-800 font-medium truncate max-w-xs">{listing.title}</span>
       </nav>
 
+      {/* Background tracking for Recently Viewed items */}
+      <TrackRecentlyViewed listingId={listing.id} />
+
       {/* Main Grid: Gallery + Product Detail */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
@@ -108,6 +113,14 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                   {listing.category.replace('-', ' ')}
                 </span>
               </div>
+              {listing.subcategory && (
+                <div className="bg-slate-50 p-3 rounded-xl">
+                  <span className="text-xs text-slate-400 block font-medium">Subcategory</span>
+                  <span className="text-sm font-semibold text-slate-800 capitalize">
+                    {listing.subcategory}
+                  </span>
+                </div>
+              )}
               <div className="bg-slate-50 p-3 rounded-xl">
                 <span className="text-xs text-slate-400 block font-medium">Condition</span>
                 <span className="text-sm font-semibold text-slate-800">
@@ -169,7 +182,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
               </span>
             </div>
 
-            {/* Prominent Call Seller Section */}
+            {/* Prominent Call & Message Seller Section */}
             {(() => {
               const sellerPhone = listing.seller?.phone?.trim() || listing.phone?.trim() || null;
               const sellerName = listing.seller?.name?.trim() || 'Verified Seller';
@@ -177,10 +190,19 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
 
               return (
                 <div className="pt-3 space-y-3">
-                  <CallSellerButton
-                    phone={sellerPhone}
-                    sellerName={sellerName}
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <CallSellerButton
+                      phone={sellerPhone}
+                      sellerName={sellerName}
+                    />
+                    <Link
+                      href={`/messages?listing=${listing.id}&seller=${listing.seller_id}`}
+                      className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-lg shadow-indigo-600/20 transition-all text-center"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      Message Seller
+                    </Link>
+                  </div>
 
                   <div className="text-center">
                     <p className="text-xs text-slate-500">
@@ -197,26 +219,37 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
 
           {/* Seller Profile Card */}
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Seller Information
-            </h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Seller Information
+              </h4>
+              <Link
+                href={`/seller/${listing.seller_id}`}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"
+              >
+                View Profile →
+              </Link>
+            </div>
             
-            <div className="flex items-center gap-3.5">
+            <Link
+              href={`/seller/${listing.seller_id}`}
+              className="flex items-center gap-3.5 group p-1 -m-1 rounded-xl hover:bg-slate-50 transition-colors"
+            >
               {listing.seller?.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={listing.seller.avatar_url}
                   alt={listing.seller.name || 'Seller'}
-                  className="w-12 h-12 rounded-full object-cover border border-slate-200"
+                  className="w-12 h-12 rounded-full object-cover border border-slate-200 group-hover:border-indigo-400 transition-colors"
                 />
               ) : (
-                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-base">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-base group-hover:bg-emerald-200 transition-colors">
                   {listing.seller?.name ? listing.seller.name.charAt(0).toUpperCase() : 'S'}
                 </div>
               )}
 
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-slate-900 text-base truncate">
+                <p className="font-bold text-slate-900 text-base truncate group-hover:text-indigo-600 transition-colors">
                   {listing.seller?.name || 'Local Seller'}
                 </p>
                 <div className="flex items-center gap-1 text-xs text-emerald-700 font-medium mt-0.5">
@@ -224,7 +257,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                   <span>Verified Phone Seller</span>
                 </div>
               </div>
-            </div>
+            </Link>
 
             <div className="text-xs text-slate-500 space-y-1 pt-1 border-t border-slate-100">
               <p>Member on Bazaar since {listing.seller?.created_at ? new Date(listing.seller.created_at).getFullYear() : '2025'}</p>
@@ -290,6 +323,28 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
           </div>
         </section>
       )}
+
+      {/* Mobile Sticky Bottom CTA Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 px-4 sm:hidden flex items-center justify-between gap-3 shadow-2xl">
+        <div className="min-w-0">
+          <span className="text-[11px] text-slate-500 block truncate">{listing.title}</span>
+          <span className="text-base font-extrabold text-slate-900">{formatPrice(listing.price)}</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <CallSellerButton
+            phone={listing.seller?.phone || listing.phone}
+            sellerName={listing.seller?.name}
+            size="sm"
+          />
+          <Link
+            href={`/messages?listing=${listing.id}&seller=${listing.seller_id}`}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-md shadow-indigo-600/20"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Message
+          </Link>
+        </div>
+      </div>
 
     </div>
   );

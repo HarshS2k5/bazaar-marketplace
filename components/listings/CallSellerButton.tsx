@@ -10,9 +10,10 @@ interface CallSellerButtonProps {
   phone?: string | null;
   sellerName?: string;
   className?: string;
+  size?: 'sm' | 'md' | 'lg';
 }
 
-export function CallSellerButton({ phone, sellerName = 'Seller', className }: CallSellerButtonProps) {
+export function CallSellerButton({ phone, sellerName = 'Seller', className, size = 'lg' }: CallSellerButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -26,12 +27,12 @@ export function CallSellerButton({ phone, sellerName = 'Seller', className }: Ca
       <Button
         disabled
         variant="outline"
-        size="lg"
-        className={`w-full bg-slate-100 border-slate-200 text-slate-400 font-medium text-sm py-3.5 flex items-center justify-center gap-2 rounded-xl cursor-not-allowed ${className || ''}`}
+        size={size}
+        className={`w-full bg-slate-100 border-slate-200 text-slate-400 font-medium text-sm flex items-center justify-center gap-2 rounded-xl cursor-not-allowed ${className || ''}`}
         title="Seller has not provided a contact phone number"
       >
         <PhoneOff className="w-4 h-4 text-slate-400" />
-        <span>Phone number unavailable</span>
+        <span>Phone unavailable</span>
       </Button>
     );
   }
@@ -51,11 +52,13 @@ export function CallSellerButton({ phone, sellerName = 'Seller', className }: Ca
       <Button
         onClick={() => setIsOpen(true)}
         variant="primary"
-        size="lg"
-        className={`w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base py-3.5 shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2.5 rounded-xl ${className || ''}`}
+        size={size}
+        className={`w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 rounded-xl ${
+          size === 'sm' ? 'text-xs py-2 px-3' : 'text-base py-3.5'
+        } ${className || ''}`}
       >
-        <Phone className="w-5 h-5 animate-pulse" />
-        <span>Call Seller ({formattedNumber})</span>
+        <Phone className="w-4 h-4 animate-pulse" />
+        <span>{size === 'sm' ? 'Call Seller' : `Call Seller (${formattedNumber})`}</span>
       </Button>
 
       <Modal

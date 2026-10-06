@@ -16,12 +16,14 @@ import {
   ChevronDown,
   ShoppingBag,
   Sparkles,
-  Settings
+  Settings,
+  MessageSquare
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { CATEGORIES } from '@/lib/constants';
 import { getInitials } from '@/lib/utils';
+import { getUnreadMessageCount } from '@/lib/data/messaging';
 
 export function Navbar() {
   const router = useRouter();
@@ -30,9 +32,32 @@ export function Navbar() {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
   
   const menuRef = useRef<HTMLDivElement>(null);
   const categoryRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+
+    let isMounted = true;
+    async function checkUnread() {
+      try {
+        const count = await getUnreadMessageCount(user!.id);
+        if (isMounted) setUnreadCount(count);
+      } catch {}
+    }
+
+    checkUnread();
+    const timer = setInterval(checkUnread, 8000);
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, [user]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -151,6 +176,20 @@ export function Navbar() {
               About Us
             </Link>
 
+            {/* Messages Icon */}
+            <Link
+              href="/messages"
+              className="p-2 rounded-xl text-slate-600 hover:text-indigo-600 hover:bg-slate-100 transition-colors relative"
+              title="Messages"
+            >
+              <MessageSquare className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center animate-pulse shadow-xs">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Link>
+
             {/* Saved Items / Favorites Icon */}
             <Link
               href="/favorites"
@@ -203,6 +242,22 @@ export function Navbar() {
                     </Link>
 
                     <div className="py-1">
+                      <Link
+                        href="/messages"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="flex items-center justify-between px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <MessageSquare className="w-4 h-4 text-slate-400" />
+                          <span>Messages</span>
+                        </div>
+                        {unreadCount > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-indigo-500 text-white text-[10px] font-bold">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </Link>
+
                       <Link
                         href="/dashboard"
                         onClick={() => setIsUserMenuOpen(false)}
@@ -352,6 +407,21 @@ export function Navbar() {
             >
               <Sparkles className="w-4 h-4 text-emerald-600" />
               <span>About the Founder</span>
+            </Link>
+            <Link
+              href="/messages"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex items-center justify-between text-sm text-slate-700 py-1.5"
+            >
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-indigo-500" />
+                <span>Messages</span>
+              </div>
+              {unreadCount > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-indigo-500 text-white text-[10px] font-bold">
+                  {unreadCount}
+                </span>
+              )}
             </Link>
             <Link
               href="/favorites"
