@@ -36,6 +36,7 @@ export interface Profile {
   email: string;
   phone?: string | null;
   location?: string | null;
+  bio?: string | null;
   avatar_url?: string | null;
   role?: 'user' | 'admin';
   is_suspended?: boolean;

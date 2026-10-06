@@ -15,9 +15,11 @@ interface AuthContextType {
     password?: string;
     phone?: string;
     location?: string;
-  }) => Promise<{ success: boolean; error?: string }>;
+    bio?: string;
+  }) => Promise<{ success: boolean; error?: string; requiresConfirmation?: boolean }>;
   logout: () => Promise<void>;
-  updateProfile: (data: Partial<Profile>) => Promise<void>;
+  updateProfile: (data: Partial<Profile>) => Promise<{ success: boolean; error?: string }>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -26,7 +28,8 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => ({ success: false }),
   signUp: async () => ({ success: false }),
   logout: async () => {},
-  updateProfile: async () => {},
+  updateProfile: async () => ({ success: false }),
+  refreshProfile: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -35,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function initAuth() {
-      // 1. Purge any legacy demo user stored in client localStorage
+      // 1. Purge legacy demo users if stored in client localStorage
       if (typeof window !== 'undefined') {
         try {
           const stored = localStorage.getItem('bazaar_current_user');
@@ -71,24 +74,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               .from('profiles')
               .select('*')
               .eq('id', session.user.id)
-              .single();
+              .maybeSingle();
 
             if (profile) {
-              setUser(profile);
+              if (profile.is_suspended) {
+                await supabase.auth.signOut();
+                setUser(null);
+              } else {
+                setUser(profile);
+              }
             } else {
-              // Construct profile from authenticated user metadata
-              setUser({
+              // Construct and save profile from authenticated user metadata
+              const newProfile: Profile = {
                 id: session.user.id,
-                name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
+                name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Customer',
                 email: session.user.email || '',
                 phone: session.user.user_metadata?.phone || null,
                 location: session.user.user_metadata?.location || null,
+                bio: session.user.user_metadata?.bio || null,
                 avatar_url: session.user.user_metadata?.avatar_url || null,
                 role: session.user.user_metadata?.role || 'user',
-              });
+                is_suspended: false,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+              try {
+                await supabase.from('profiles').insert(newProfile);
+              } catch {}
+              setUser(newProfile);
             }
           } else {
-            // User is logged out
             setUser(null);
           }
 
@@ -100,17 +115,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   .from('profiles')
                   .select('*')
                   .eq('id', newSession.user.id)
-                  .single();
+                  .maybeSingle();
 
-                setUser(profile || {
-                  id: newSession.user.id,
-                  name: newSession.user.user_metadata?.name || newSession.user.email?.split('@')[0] || 'User',
-                  email: newSession.user.email || '',
-                  phone: newSession.user.user_metadata?.phone || null,
-                  location: newSession.user.user_metadata?.location || null,
-                  avatar_url: newSession.user.user_metadata?.avatar_url || null,
-                  role: newSession.user.user_metadata?.role || 'user',
-                });
+                if (profile) {
+                  if (profile.is_suspended) {
+                    await supabase.auth.signOut();
+                    setUser(null);
+                  } else {
+                    setUser(profile);
+                  }
+                } else {
+                  setUser({
+                    id: newSession.user.id,
+                    name: newSession.user.user_metadata?.name || newSession.user.email?.split('@')[0] || 'Customer',
+                    email: newSession.user.email || '',
+                    phone: newSession.user.user_metadata?.phone || null,
+                    location: newSession.user.user_metadata?.location || null,
+                    bio: newSession.user.user_metadata?.bio || null,
+                    avatar_url: newSession.user.user_metadata?.avatar_url || null,
+                    role: newSession.user.user_metadata?.role || 'user',
+                    is_suspended: false,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  });
+                }
               } else {
                 setUser(null);
               }
@@ -129,8 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // 3. Fallback when Supabase credentials are not yet configured:
-      // Check if user previously logged in locally; otherwise default to LOGGED OUT (null).
+      // 3. Fallback when Supabase credentials are not configured (local dev)
       try {
         const stored = localStorage.getItem('bazaar_current_user');
         if (stored) {
@@ -149,7 +176,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
   }, []);
 
-  const login = async (email: string, password?: string) => {
+  const login = async (email: string, password?: string): Promise<{ success: boolean; error?: string }> => {
     if (!email || !email.trim()) {
       return { success: false, error: 'Email address is required.' };
     }
@@ -167,26 +194,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           password,
         });
 
-        if (error) return { success: false, error: error.message };
+        if (error) {
+          if (error.message.toLowerCase().includes('email not confirmed')) {
+            return {
+              success: false,
+              error: 'Please verify your email address before signing in. Check your inbox for the confirmation email.',
+            };
+          }
+          return { success: false, error: error.message };
+        }
+
         if (data.user) {
           const { data: profile } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', data.user.id)
-            .single();
+            .maybeSingle();
 
           if (profile) {
+            if (profile.is_suspended) {
+              await supabase.auth.signOut();
+              return {
+                success: false,
+                error: 'This account has been suspended due to marketplace policy violations. Please contact support.',
+              };
+            }
             setUser(profile);
           } else {
-            setUser({
+            const newProfile: Profile = {
               id: data.user.id,
-              name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
+              name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'Customer',
               email: data.user.email || cleanEmail,
               phone: data.user.user_metadata?.phone || null,
               location: data.user.user_metadata?.location || null,
+              bio: data.user.user_metadata?.bio || null,
               avatar_url: data.user.user_metadata?.avatar_url || null,
               role: data.user.user_metadata?.role || 'user',
-            });
+              is_suspended: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            try {
+              await supabase.from('profiles').insert(newProfile);
+            } catch {}
+            setUser(newProfile);
           }
           return { success: true };
         }
@@ -195,7 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Local authentication fallback
+    // Local authentication fallback (dev)
     try {
       const usersStr = localStorage.getItem('bazaar_registered_accounts');
       const registeredUsers = usersStr ? JSON.parse(usersStr) : [];
@@ -207,14 +258,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (found.password && found.password !== password) {
           return { success: false, error: 'Incorrect password.' };
         }
+        if (found.is_suspended) {
+          return { success: false, error: 'This account has been suspended.' };
+        }
         const profile: Profile = {
           id: found.id,
           name: found.name,
           email: found.email,
           phone: found.phone || null,
           location: found.location || null,
+          bio: found.bio || null,
           avatar_url: found.avatar_url || null,
           role: found.role || 'user',
+          is_suspended: found.is_suspended || false,
+          created_at: found.created_at,
+          updated_at: found.updated_at,
         };
         setUser(profile);
         localStorage.setItem('bazaar_current_user', JSON.stringify(profile));
@@ -236,7 +294,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password?: string;
     phone?: string;
     location?: string;
-  }) => {
+    bio?: string;
+  }): Promise<{ success: boolean; error?: string; requiresConfirmation?: boolean }> => {
     if (!data.name || !data.name.trim()) {
       return { success: false, error: 'Full name is required.' };
     }
@@ -251,6 +310,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const cleanEmail = data.email.trim();
     const cleanPhone = data.phone?.trim() || null;
     const cleanLocation = data.location?.trim() || null;
+    const cleanBio = data.bio?.trim() || null;
 
     if (isSupabaseConfigured()) {
       try {
@@ -263,6 +323,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               name: cleanName,
               phone: cleanPhone,
               location: cleanLocation,
+              bio: cleanBio,
             },
           },
         });
@@ -276,11 +337,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: cleanEmail,
             phone: cleanPhone,
             location: cleanLocation,
+            bio: cleanBio,
             avatar_url: null,
             role: 'user',
+            is_suspended: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           };
-          setUser(newProfile);
-          return { success: true };
+
+          // Save customer profile record to database
+          try {
+            await supabase.from('profiles').upsert(newProfile);
+          } catch (err) {
+            console.warn('Direct profile upsert error:', err);
+          }
+
+          if (authData.session) {
+            setUser(newProfile);
+            return { success: true };
+          } else {
+            return { success: true, requiresConfirmation: true };
+          }
         }
       } catch (e: any) {
         return { success: false, error: e.message || 'Registration failed.' };
@@ -294,8 +371,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: cleanEmail,
       phone: cleanPhone,
       location: cleanLocation,
+      bio: cleanBio,
       avatar_url: null,
       role: 'user',
+      is_suspended: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
 
     try {
@@ -323,23 +404,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  const updateProfile = async (data: Partial<Profile>) => {
-    if (!user) return;
-    const updated = { ...user, ...data };
+  const updateProfile = async (data: Partial<Profile>): Promise<{ success: boolean; error?: string }> => {
+    if (!user) return { success: false, error: 'Not authenticated.' };
+    const updated: Profile = { ...user, ...data, updated_at: new Date().toISOString() };
+
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        await supabase.from('profiles').update(data).eq('id', user.id);
-      } catch {}
+        const { error } = await supabase.from('profiles').update(data).eq('id', user.id);
+        if (error) throw error;
+
+        // Sync seller phone & location to all active listings created by this customer
+        if (data.phone !== undefined || data.location !== undefined) {
+          const syncData: any = {};
+          if (data.phone !== undefined) syncData.phone = data.phone;
+          if (data.location !== undefined) syncData.location = data.location;
+          try {
+            await supabase.from('listings').update(syncData).eq('seller_id', user.id);
+          } catch {}
+        }
+      } catch (err: any) {
+        console.error('Update profile error:', err);
+        return { success: false, error: err.message || 'Failed to update profile.' };
+      }
     }
+
     setUser(updated);
     try {
       localStorage.setItem('bazaar_current_user', JSON.stringify(updated));
     } catch {}
+
+    return { success: true };
+  };
+
+  const refreshProfile = async () => {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+          if (profile) setUser(profile);
+        }
+      } catch {}
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signUp, logout, updateProfile }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        signUp,
+        logout,
+        updateProfile,
+        refreshProfile,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

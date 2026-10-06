@@ -19,7 +19,8 @@ import {
   Clock,
   ShieldCheck,
   XCircle,
-  Phone
+  Phone,
+  User
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getSellerListings, deleteListing, updateListing } from '@/lib/data/listings';
@@ -139,12 +140,20 @@ function DashboardContent() {
           </p>
         </div>
 
-        <Link href="/sell">
-          <Button variant="primary" size="md" className="rounded-xl shadow-sm">
-            <PlusCircle className="w-4 h-4" />
-            <span>Create New Ad</span>
-          </Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/profile">
+            <Button variant="outline" size="md" className="rounded-xl border-slate-300">
+              <User className="w-4 h-4 text-slate-500" />
+              <span>Customer Profile</span>
+            </Button>
+          </Link>
+          <Link href="/sell">
+            <Button variant="primary" size="md" className="rounded-xl shadow-sm bg-emerald-600 hover:bg-emerald-700">
+              <PlusCircle className="w-4 h-4" />
+              <span>Create New Ad</span>
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Metrics Row */}

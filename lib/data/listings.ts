@@ -550,13 +550,34 @@ export async function getUsersList(): Promise<Profile[]> {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (!error && data) return data as Profile[];
+      if (!error && data) {
+        return (data as Profile[]).filter((p) => !DEMO_SEED_IDS.has(p.id));
+      }
     } catch (e) {
       console.warn('Supabase getUsersList error:', e);
     }
   }
 
-  return fallbackProfiles;
+  // Fallback for development / preview
+  let localUsers: Profile[] = [...fallbackProfiles];
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('bazaar_registered_accounts');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          localUsers = [...parsed, ...localUsers];
+        }
+      }
+    } catch {}
+  }
+
+  const seen = new Set<string>();
+  return localUsers.filter((u) => {
+    if (!u || !u.id || seen.has(u.id) || DEMO_SEED_IDS.has(u.id)) return false;
+    seen.add(u.id);
+    return true;
+  });
 }
 
 export async function setUserSuspension(userId: string, isSuspended: boolean): Promise<boolean> {
