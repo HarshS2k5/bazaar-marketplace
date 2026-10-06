@@ -1,5 +1,5 @@
 import { FilterOptions, ListingWithDetails, Profile, Report, ListingStatus } from '@/types';
-import { INITIAL_LISTINGS, SEED_PROFILES } from './mock-data';
+import { INITIAL_LISTINGS } from './mock-data';
 import { createClient as createBrowserSupabase } from '@/lib/supabase/client';
 
 export function isSupabaseConfigured(): boolean {
@@ -10,21 +10,19 @@ export function isSupabaseConfigured(): boolean {
 
 // In-memory cache for development/offline fallback state
 let fallbackListings: ListingWithDetails[] = [...INITIAL_LISTINGS];
-let fallbackProfiles: Profile[] = [...SEED_PROFILES];
-let fallbackFavorites: { [userId: string]: Set<string> } = {
-  'test-user': new Set<string>(['a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d']),
-};
+let fallbackProfiles: Profile[] = [];
+let fallbackFavorites: { [userId: string]: Set<string> } = {};
 let fallbackReports: Report[] = [
   {
     id: 'rep-seed-1',
-    reporter_id: '11111111-1111-1111-1111-111111111111',
+    reporter_id: '00000000-0000-0000-0000-000000000001',
     listing_id: 'c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f',
     reason: 'Misleading information',
     description: 'Seller claims bike was bought in 2024 but frame geometry matches 2021 model.',
     status: 'pending',
     created_at: new Date(Date.now() - 3600000).toISOString(),
     listing: fallbackListings[2],
-    reporter: SEED_PROFILES[0],
+    reporter: null,
   }
 ];
 
@@ -656,6 +654,6 @@ export async function getReports(): Promise<Report[]> {
   return fallbackReports.map((r) => ({
     ...r,
     listing: fallbackListings.find((l) => l.id === r.listing_id),
-    reporter: fallbackProfiles.find((p) => p.id === r.reporter_id) || SEED_PROFILES[0],
+    reporter: fallbackProfiles.find((p) => p.id === r.reporter_id) || null,
   }));
 }

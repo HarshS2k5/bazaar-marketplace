@@ -37,20 +37,6 @@ function LoginFormContent() {
     }
   };
 
-  const handleQuickDemo = async (demoEmail: string) => {
-    setEmail(demoEmail);
-    setPassword('DemoPass123!');
-    setLoading(true);
-    setError(null);
-    const res = await login(demoEmail, 'DemoPass123!');
-    if (res.success) {
-      router.push(redirectUrl);
-    } else {
-      setError(res.error || 'Login failed.');
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md space-y-6">
@@ -91,7 +77,7 @@ function LoginFormContent() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="arjun.sharma@example.com"
+                  placeholder="Enter your email"
                   required
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
@@ -133,32 +119,6 @@ function LoginFormContent() {
               Sign In
             </Button>
           </form>
-
-          {/* Quick Demo Logins Helper */}
-          <div className="pt-4 border-t border-slate-100">
-            <p className="text-[11px] text-slate-400 uppercase tracking-wider text-center font-semibold mb-2.5">
-              Quick Test Accounts
-            </p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('arjun.sharma@example.com')}
-                className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 text-left transition-colors font-medium"
-              >
-                <span className="block font-bold text-slate-900">Arjun Sharma</span>
-                <span className="text-[10px] text-slate-500">Seller (Mumbai)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('ananya.iyer@example.com')}
-                className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-700 text-left transition-colors font-medium"
-              >
-                <span className="block font-bold text-indigo-900">Ananya Iyer</span>
-                <span className="text-[10px] text-indigo-500">Admin Role</span>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer Link */}

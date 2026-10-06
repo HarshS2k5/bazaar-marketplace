@@ -4,7 +4,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Profile } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import { isSupabaseConfigured } from '@/lib/data/listings';
-import { SEED_PROFILES } from '@/lib/data/mock-data';
 
 interface AuthContextType {
   user: Profile | null;
@@ -36,6 +35,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function initAuth() {
+      // 1. Purge any legacy demo user stored in client localStorage
+      if (typeof window !== 'undefined') {
+        try {
+          const stored = localStorage.getItem('bazaar_current_user');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (
+              !parsed ||
+              parsed.email?.includes('example.com') ||
+              parsed.name?.toLowerCase().includes('arjun') ||
+              parsed.name?.toLowerCase().includes('sharma') ||
+              parsed.name?.toLowerCase().includes('demo') ||
+              parsed.id === '11111111-1111-1111-1111-111111111111'
+            ) {
+              localStorage.removeItem('bazaar_current_user');
+            }
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
+      // 2. Real Supabase Session & Profile initialization
       if (isSupabaseConfigured()) {
         try {
           const supabase = createClient();
@@ -44,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } = await supabase.auth.getSession();
 
           if (session?.user) {
-            // Load profile from public.profiles
+            // Load real profile from Supabase profiles table
             const { data: profile } = await supabase
               .from('profiles')
               .select('*')
@@ -54,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (profile) {
               setUser(profile);
             } else {
-              // Fallback construct from session user
+              // Construct profile from authenticated user metadata
               setUser({
                 id: session.user.id,
                 name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
@@ -65,9 +87,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 role: session.user.user_metadata?.role || 'user',
               });
             }
+          } else {
+            // User is logged out
+            setUser(null);
           }
 
-          // Subscribe to auth state changes
+          // Subscribe to Supabase auth state changes
           const { data: authListener } = supabase.auth.onAuthStateChange(
             async (_event, newSession) => {
               if (newSession?.user) {
@@ -98,21 +123,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
         } catch (err) {
           console.error('Supabase auth initialization error:', err);
+          setUser(null);
+          setLoading(false);
+          return;
         }
       }
 
-      // Check localStorage for offline demo user
+      // 3. Fallback when Supabase credentials are not yet configured:
+      // Check if user previously logged in locally; otherwise default to LOGGED OUT (null).
       try {
         const stored = localStorage.getItem('bazaar_current_user');
         if (stored) {
-          setUser(JSON.parse(stored));
+          const parsed = JSON.parse(stored);
+          setUser(parsed);
         } else {
-          // Default demo logged-in user so testing is instantaneous
-          const defaultDemo = SEED_PROFILES[0];
-          setUser(defaultDemo);
-          localStorage.setItem('bazaar_current_user', JSON.stringify(defaultDemo));
+          setUser(null);
         }
-      } catch {}
+      } catch {
+        setUser(null);
+      }
 
       setLoading(false);
     }
@@ -121,11 +150,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, password?: string) => {
-    if (isSupabaseConfigured() && password) {
+    if (!email || !email.trim()) {
+      return { success: false, error: 'Email address is required.' };
+    }
+    if (!password) {
+      return { success: false, error: 'Password is required.' };
+    }
+
+    const cleanEmail = email.trim();
+
+    if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
+          email: cleanEmail,
           password,
         });
 
@@ -137,30 +175,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .eq('id', data.user.id)
             .single();
 
-          if (profile) setUser(profile);
+          if (profile) {
+            setUser(profile);
+          } else {
+            setUser({
+              id: data.user.id,
+              name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
+              email: data.user.email || cleanEmail,
+              phone: data.user.user_metadata?.phone || null,
+              location: data.user.user_metadata?.location || null,
+              avatar_url: data.user.user_metadata?.avatar_url || null,
+              role: data.user.user_metadata?.role || 'user',
+            });
+          }
           return { success: true };
         }
       } catch (e: any) {
-        return { success: false, error: e.message };
+        return { success: false, error: e.message || 'Login failed.' };
       }
     }
 
-    // Fallback/Local login
-    const matched = SEED_PROFILES.find((p) => p.email.toLowerCase() === email.toLowerCase()) || {
-      id: crypto.randomUUID(),
-      name: email.split('@')[0],
-      email,
-      phone: '+91 98201 00000',
-      location: 'Mumbai, India',
-      avatar_url: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80`,
-      role: 'user' as const,
-    };
-
-    setUser(matched);
+    // Local authentication fallback
     try {
-      localStorage.setItem('bazaar_current_user', JSON.stringify(matched));
-    } catch {}
-    return { success: true };
+      const usersStr = localStorage.getItem('bazaar_registered_accounts');
+      const registeredUsers = usersStr ? JSON.parse(usersStr) : [];
+      const found = registeredUsers.find(
+        (u: any) => u.email.toLowerCase() === cleanEmail.toLowerCase()
+      );
+
+      if (found) {
+        if (found.password && found.password !== password) {
+          return { success: false, error: 'Incorrect password.' };
+        }
+        const profile: Profile = {
+          id: found.id,
+          name: found.name,
+          email: found.email,
+          phone: found.phone || null,
+          location: found.location || null,
+          avatar_url: found.avatar_url || null,
+          role: found.role || 'user',
+        };
+        setUser(profile);
+        localStorage.setItem('bazaar_current_user', JSON.stringify(profile));
+        return { success: true };
+      }
+
+      return {
+        success: false,
+        error: 'No account found with this email. Please sign up to create your account.',
+      };
+    } catch {
+      return { success: false, error: 'Login failed. Please try again.' };
+    }
   };
 
   const signUp = async (data: {
@@ -170,17 +237,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     phone?: string;
     location?: string;
   }) => {
-    if (isSupabaseConfigured() && data.password) {
+    if (!data.name || !data.name.trim()) {
+      return { success: false, error: 'Full name is required.' };
+    }
+    if (!data.email || !data.email.trim()) {
+      return { success: false, error: 'Email address is required.' };
+    }
+    if (!data.password || data.password.length < 6) {
+      return { success: false, error: 'Password must be at least 6 characters.' };
+    }
+
+    const cleanName = data.name.trim();
+    const cleanEmail = data.email.trim();
+    const cleanPhone = data.phone?.trim() || null;
+    const cleanLocation = data.location?.trim() || null;
+
+    if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
         const { data: authData, error } = await supabase.auth.signUp({
-          email: data.email,
+          email: cleanEmail,
           password: data.password,
           options: {
             data: {
-              name: data.name,
-              phone: data.phone,
-              location: data.location,
+              name: cleanName,
+              phone: cleanPhone,
+              location: cleanLocation,
             },
           },
         });
@@ -190,34 +272,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (authData.user) {
           const newProfile: Profile = {
             id: authData.user.id,
-            name: data.name,
-            email: data.email,
-            phone: data.phone || null,
-            location: data.location || null,
+            name: cleanName,
+            email: cleanEmail,
+            phone: cleanPhone,
+            location: cleanLocation,
+            avatar_url: null,
             role: 'user',
           };
           setUser(newProfile);
           return { success: true };
         }
       } catch (e: any) {
-        return { success: false, error: e.message };
+        return { success: false, error: e.message || 'Registration failed.' };
       }
     }
 
-    // Fallback sign up
+    // Local authentication registration
     const newProfile: Profile = {
       id: crypto.randomUUID(),
-      name: data.name,
-      email: data.email,
-      phone: data.phone || null,
-      location: data.location || null,
-      avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+      name: cleanName,
+      email: cleanEmail,
+      phone: cleanPhone,
+      location: cleanLocation,
+      avatar_url: null,
       role: 'user',
     };
-    setUser(newProfile);
+
     try {
+      const usersStr = localStorage.getItem('bazaar_registered_accounts');
+      const registeredUsers = usersStr ? JSON.parse(usersStr) : [];
+      registeredUsers.push({ ...newProfile, password: data.password });
+      localStorage.setItem('bazaar_registered_accounts', JSON.stringify(registeredUsers));
       localStorage.setItem('bazaar_current_user', JSON.stringify(newProfile));
     } catch {}
+
+    setUser(newProfile);
     return { success: true };
   };
 

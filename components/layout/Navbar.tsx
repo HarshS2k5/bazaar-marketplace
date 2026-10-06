@@ -15,11 +15,13 @@ import {
   X, 
   ChevronDown,
   ShoppingBag,
-  Sparkles
+  Sparkles,
+  Settings
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { CATEGORIES } from '@/lib/constants';
+import { getInitials } from '@/lib/utils';
 
 export function Navbar() {
   const router = useRouter();
@@ -163,7 +165,8 @@ export function Navbar() {
               <div className="relative" ref={menuRef}>
                 <button
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center gap-2 p-1.5 rounded-full hover:ring-2 hover:ring-emerald-500/20 transition-all"
+                  className="flex items-center gap-2 p-1.5 rounded-full hover:ring-2 hover:ring-emerald-500/20 transition-all focus:outline-none"
+                  aria-label="User account menu"
                 >
                   {user.avatar_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -173,19 +176,23 @@ export function Navbar() {
                       className="w-8 h-8 rounded-full object-cover border border-slate-200"
                     />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-xs">
-                      {user.name.charAt(0).toUpperCase()}
+                    <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
+                      {getInitials(user.name)}
                     </div>
                   )}
-                  <span className="hidden sm:inline-block text-sm font-medium text-slate-700 max-w-[100px] truncate">
+                  <span className="hidden sm:inline-block text-sm font-medium text-slate-700 max-w-[120px] truncate">
                     {user.name}
                   </span>
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
                 </button>
 
                 {isUserMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in zoom-in-95">
-                    <div className="px-4 py-3 border-b border-slate-100">
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in zoom-in-95">
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="block px-4 py-3 border-b border-slate-100 hover:bg-slate-50/80 transition-colors"
+                    >
                       <p className="text-sm font-semibold text-slate-900 truncate">{user.name}</p>
                       <p className="text-xs text-slate-500 truncate">{user.email}</p>
                       {user.role === 'admin' && (
@@ -193,7 +200,7 @@ export function Navbar() {
                           Admin Access
                         </span>
                       )}
-                    </div>
+                    </Link>
 
                     <div className="py-1">
                       <Link
@@ -202,7 +209,16 @@ export function Navbar() {
                         className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                       >
                         <Package className="w-4 h-4 text-slate-400" />
-                        <span>My Listings</span>
+                        <span>Account Dashboard</span>
+                      </Link>
+
+                      <Link
+                        href="/profile"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      >
+                        <Settings className="w-4 h-4 text-slate-400" />
+                        <span>Profile Settings</span>
                       </Link>
 
                       <Link
@@ -246,12 +262,12 @@ export function Navbar() {
               <div className="flex items-center gap-2">
                 <Link href="/login">
                   <Button variant="ghost" size="sm">
-                    Log In
+                    Login
                   </Button>
                 </Link>
                 <Link href="/register" className="hidden sm:block">
                   <Button variant="outline" size="sm">
-                    Register
+                    Sign Up
                   </Button>
                 </Link>
               </div>
@@ -353,7 +369,15 @@ export function Navbar() {
                   className="flex items-center gap-2 text-sm text-slate-700 py-1.5"
                 >
                   <Package className="w-4 h-4 text-slate-400" />
-                  <span>My Listings</span>
+                  <span>Account Dashboard</span>
+                </Link>
+                <Link
+                  href="/profile"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-2 text-sm text-slate-700 py-1.5"
+                >
+                  <Settings className="w-4 h-4 text-slate-400" />
+                  <span>Profile Settings</span>
                 </Link>
                 {user.role === 'admin' && (
                   <Link
@@ -381,12 +405,12 @@ export function Navbar() {
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
                   <Button variant="outline" size="sm" className="w-full">
-                    Log In
+                    Login
                   </Button>
                 </Link>
                 <Link href="/register" onClick={() => setIsMobileMenuOpen(false)}>
                   <Button variant="primary" size="sm" className="w-full">
-                    Register
+                    Sign Up
                   </Button>
                 </Link>
               </div>

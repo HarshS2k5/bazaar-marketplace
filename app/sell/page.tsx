@@ -383,7 +383,7 @@ export default function SellPage() {
                   type="text"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
-                  placeholder="e.g. Bandra West, Mumbai"
+                  placeholder="e.g. City, Neighborhood"
                   className={`w-full bg-slate-50 border rounded-xl pl-10 pr-4 py-3 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${
                     errors.location ? 'border-rose-400' : 'border-slate-200'
                   }`}
@@ -404,7 +404,7 @@ export default function SellPage() {
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="e.g. +91 98201 23456"
+                  placeholder="+91 XXXXXXXXXX"
                   className={`w-full bg-slate-50 border rounded-xl pl-10 pr-4 py-3 text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${
                     errors.phone ? 'border-rose-400' : 'border-slate-200'
                   }`}

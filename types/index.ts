@@ -74,7 +74,7 @@ export interface Listing {
 
 export interface ListingWithDetails extends Listing {
   images: ListingImage[];
-  seller?: Profile;
+  seller?: Profile | null;
   is_favorite?: boolean;
 }
 
@@ -103,8 +103,8 @@ export interface Report {
   description?: string;
   status: 'pending' | 'resolved' | 'dismissed';
   created_at: string;
-  listing?: ListingWithDetails;
-  reporter?: Profile;
+  listing?: ListingWithDetails | null;
+  reporter?: Profile | null;
 }
 
 export interface FilterOptions {

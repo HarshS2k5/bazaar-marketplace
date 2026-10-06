@@ -78,7 +78,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-> **Note**: If you run without Supabase credentials, Bazaar automatically falls back to an interactive client-side preview mode with preloaded seed listings and mock auth so you can evaluate the UI and workflows immediately.
+> **Note**: When running with Supabase configured in `.env.local`, Bazaar automatically connects to your live Supabase authentication, database, and storage. If run before credentials are provided, visitors start in a clean logged-out state.
 
 ### 5. Run Locally
 

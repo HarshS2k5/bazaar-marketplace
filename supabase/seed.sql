@@ -2,13 +2,13 @@
 -- BAZAAR MARKETPLACE - SAMPLE SEED DATA
 -- ========================================================
 
--- Insert mock seller profiles (if not already present)
+-- Insert system seller profile for catalog items
 INSERT INTO public.profiles (id, name, email, phone, location, avatar_url, role)
 VALUES 
-  ('11111111-1111-1111-1111-111111111111', 'Arjun Sharma', 'arjun.sharma@example.com', '+91 98201 23456', 'Bandra West, Mumbai', 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80', 'user'),
-  ('22222222-2222-2222-2222-222222222222', 'Priya Patel', 'priya.patel@example.com', '+91 98450 67890', 'Indiranagar, Bengaluru', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80', 'user'),
-  ('33333333-3333-3333-3333-333333333333', 'Rahul Verma', 'rahul.verma@example.com', '+91 98112 34567', 'Connaught Place, New Delhi', 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=200&q=80', 'user'),
-  ('44444444-4444-4444-4444-444444444444', 'Ananya Iyer', 'ananya.iyer@example.com', '+91 94440 12345', 'T. Nagar, Chennai', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80', 'admin')
+  ('11111111-1111-1111-1111-111111111111', 'Verified Seller', 'seller@bazaar.marketplace', '+91 98000 00001', 'Bandra West, Mumbai', NULL, 'user'),
+  ('22222222-2222-2222-2222-222222222222', 'Verified Seller', 'seller@bazaar.marketplace', '+91 98000 00002', 'Indiranagar, Bengaluru', NULL, 'user'),
+  ('33333333-3333-3333-3333-333333333333', 'Verified Seller', 'seller@bazaar.marketplace', '+91 98000 00003', 'Connaught Place, New Delhi', NULL, 'user'),
+  ('44444444-4444-4444-4444-444444444444', 'Verified Seller', 'seller@bazaar.marketplace', '+91 98000 00004', 'T. Nagar, Chennai', NULL, 'user')
 ON CONFLICT (id) DO NOTHING;
 
 -- Insert Listings
