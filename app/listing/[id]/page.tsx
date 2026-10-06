@@ -21,6 +21,7 @@ import { ImageGallery } from '@/components/listings/ImageGallery';
 import { CallSellerButton } from '@/components/listings/CallSellerButton';
 import { FavoriteButton } from '@/components/listings/FavoriteButton';
 import { ReportModal } from '@/components/listings/ReportModal';
+import { ShareButton } from '@/components/listings/ShareButton';
 import { Badge } from '@/components/ui/Badge';
 import { ListingCard } from '@/components/listings/ListingCard';
 
@@ -232,24 +233,10 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
             </ul>
           </div>
 
-          {/* Report Button */}
+          {/* Report & Share Buttons */}
           <div className="flex items-center justify-between px-2 pt-1">
             <ReportModal listingId={listing.id} listingTitle={listing.title} />
-
-            <button
-              onClick={() => {
-                if (typeof navigator !== 'undefined' && navigator.share) {
-                  navigator.share({
-                    title: listing.title,
-                    url: window.location.href,
-                  });
-                }
-              }}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>Share</span>
-            </button>
+            <ShareButton title={listing.title} />
           </div>
 
         </div>
