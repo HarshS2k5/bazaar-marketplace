@@ -121,14 +121,22 @@ export function Footer() {
                   Seller Dashboard
                 </Link>
               </li>
+              <li>
+                <Link href="/about" className="text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1.5">
+                  <span>About Harsh Sisodia</span>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded">Creator</span>
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
 
         {/* Bottom Bar */}
         <div className="border-t border-slate-800 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} Bazaar Marketplace. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Bazaar Marketplace. Built by Harsh Sisodia.</p>
           <p className="flex items-center gap-4">
+            <Link href="/about" className="text-slate-400 hover:text-emerald-400">About Founder</Link>
+            <span>•</span>
             <span>Safety Guidelines</span>
             <span>•</span>
             <span>Terms of Service</span>

@@ -133,6 +133,14 @@ export function Navbar() {
               )}
             </div>
 
+            {/* About Page Link */}
+            <Link
+              href="/about"
+              className="text-sm font-medium text-slate-700 hover:text-emerald-600 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors hidden sm:block"
+            >
+              About Us
+            </Link>
+
             {/* Saved Items / Favorites Icon */}
             <Link
               href="/favorites"
@@ -305,6 +313,14 @@ export function Navbar() {
           </div>
 
           <div className="border-t border-slate-100 pt-3 space-y-2">
+            <Link
+              href="/about"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex items-center gap-2 text-sm text-slate-700 py-1.5 font-medium"
+            >
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+              <span>About the Founder</span>
+            </Link>
             <Link
               href="/favorites"
               onClick={() => setIsMobileMenuOpen(false)}
