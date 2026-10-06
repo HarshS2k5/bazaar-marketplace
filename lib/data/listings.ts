@@ -8,23 +8,46 @@ export function isSupabaseConfigured(): boolean {
   return Boolean(url && key && !url.includes('placeholder') && !url.includes('your-supabase'));
 }
 
-// In-memory cache for development/offline fallback state
-let fallbackListings: ListingWithDetails[] = [...INITIAL_LISTINGS];
+// In-memory cache for development/offline preview (Strictly empty production baseline)
+let fallbackListings: ListingWithDetails[] = [];
 let fallbackProfiles: Profile[] = [];
 let fallbackFavorites: { [userId: string]: Set<string> } = {};
-let fallbackReports: Report[] = [
-  {
-    id: 'rep-seed-1',
-    reporter_id: '00000000-0000-0000-0000-000000000001',
-    listing_id: 'c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f',
-    reason: 'Misleading information',
-    description: 'Seller claims bike was bought in 2024 but frame geometry matches 2021 model.',
-    status: 'pending',
-    created_at: new Date(Date.now() - 3600000).toISOString(),
-    listing: fallbackListings[2],
-    reporter: null,
-  }
-];
+let fallbackReports: Report[] = [];
+
+// Blocklist of legacy seed / demo IDs to permanently purge from marketplace queries
+export const DEMO_SEED_IDS = new Set([
+  'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
+  'b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e',
+  'c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f',
+  'd4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a',
+  'e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b',
+  'f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c',
+  '07a8b9c0-d1e2-3f4a-5b6c-7d8e9f0a1b2c',
+  '18b9c0d1-e2f3-4a5b-6c7d-8e9f0a1b2c3d',
+  '00000000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000003',
+  '00000000-0000-0000-0000-000000000004',
+  '10000000-0000-0000-0000-000000000001',
+  '20000000-0000-0000-0000-000000000002',
+  '30000000-0000-0000-0000-000000000003',
+  '40000000-0000-0000-0000-000000000004',
+  '50000000-0000-0000-0000-000000000005',
+  '60000000-0000-0000-0000-000000000006',
+  '70000000-0000-0000-0000-000000000007',
+  '80000000-0000-0000-0000-000000000008',
+  '11111111-1111-1111-1111-111111111111',
+  '22222222-2222-2222-2222-222222222222',
+  '33333333-3333-3333-3333-333333333333',
+  '44444444-4444-4444-4444-444444444444',
+]);
+
+export function isDemoListing(item: any): boolean {
+  if (!item) return false;
+  if (DEMO_SEED_IDS.has(item.id) || DEMO_SEED_IDS.has(item.seller_id)) return true;
+  if (item.seller?.id && DEMO_SEED_IDS.has(item.seller.id)) return true;
+  return false;
+}
 
 /**
  * Normalizes a listing ensuring the seller and phone number relationship
@@ -115,7 +138,7 @@ export async function getListings(filters: FilterOptions = {}): Promise<ListingW
       if (error) {
         console.warn('Supabase getListings error, using fallback:', error.message);
       } else if (data && data.length > 0) {
-        return (data as any[]).map(normalizeListing);
+        return (data as any[]).filter((item) => !isDemoListing(item)).map(normalizeListing);
       }
     } catch (e) {
       console.warn('Supabase query failed, falling back:', e);
@@ -168,7 +191,7 @@ export async function getListings(filters: FilterOptions = {}): Promise<ListingW
     results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
-  return results.map(normalizeListing);
+  return results.filter((item) => !isDemoListing(item)).map(normalizeListing);
 }
 
 /**
@@ -195,6 +218,9 @@ export async function getListingById(idOrSlug: string): Promise<ListingWithDetai
 
       const { data, error } = await query.single();
       if (!error && data) {
+        if (isDemoListing(data)) {
+          return null;
+        }
         try {
           await supabase.from('listings').update({ views: (data.views || 0) + 1 }).eq('id', data.id);
         } catch {}
@@ -208,10 +234,11 @@ export async function getListingById(idOrSlug: string): Promise<ListingWithDetai
   // Fallback search
   const found = fallbackListings.find(
     (item) =>
-      item.id === idOrSlug ||
-      item.slug === idOrSlug ||
-      (item.slug && item.slug.endsWith(idOrSlug)) ||
-      item.id.startsWith(idOrSlug)
+      !isDemoListing(item) &&
+      (item.id === idOrSlug ||
+        item.slug === idOrSlug ||
+        (item.slug && item.slug.endsWith(idOrSlug)) ||
+        item.id.startsWith(idOrSlug))
   );
 
   if (found) {
@@ -239,14 +266,16 @@ export async function getSellerListings(sellerId: string): Promise<ListingWithDe
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        return (data as any[]).map(normalizeListing);
+        return (data as any[]).filter((item) => !isDemoListing(item)).map(normalizeListing);
       }
     } catch (e) {
       console.warn('Supabase getSellerListings error:', e);
     }
   }
 
-  return fallbackListings.filter((item) => item.seller_id === sellerId).map(normalizeListing);
+  return fallbackListings
+    .filter((item) => !isDemoListing(item) && item.seller_id === sellerId)
+    .map(normalizeListing);
 }
 
 /**
@@ -263,11 +292,23 @@ export async function createListing(
   if (isSupabaseConfigured()) {
     try {
       const supabase = createBrowserSupabase();
+
+      // Enforce authenticated session: seller MUST be a real authenticated user
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        throw new Error('Authentication required: You must be logged in with a registered account to create a listing.');
+      }
+
+      const sellerId = user.id;
+      if (DEMO_SEED_IDS.has(sellerId)) {
+        throw new Error('Unauthorized account.');
+      }
+
       const { data: listing, error: listingError } = await supabase
         .from('listings')
         .insert({
           id: newId,
-          seller_id: listingData.seller_id,
+          seller_id: sellerId,
           title: listingData.title,
           slug: listingData.slug || `${listingData.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${newId.slice(0, 8)}`,
           description: listingData.description,
@@ -300,12 +341,12 @@ export async function createListing(
       }
 
       // Keep profiles.phone in sync if seller provided phone
-      if (listingData.phone && listingData.seller_id) {
+      if (listingData.phone && sellerId) {
         try {
           await supabase
             .from('profiles')
             .update({ phone: listingData.phone, location: listingData.location })
-            .eq('id', listingData.seller_id);
+            .eq('id', sellerId);
         } catch {}
       }
 
@@ -329,6 +370,10 @@ export async function createListing(
   }
 
   // Fallback creation
+  if (DEMO_SEED_IDS.has(listingData.seller_id)) {
+    throw new Error('Unauthorized demo seller account.');
+  }
+
   const createdListing: ListingWithDetails = normalizeListing({
     ...listingData,
     id: newId,
@@ -633,7 +678,11 @@ export async function getUserFavorites(userId: string): Promise<ListingWithDetai
         .eq('user_id', userId);
 
       if (!error && data) {
-        return data.map((d: any) => d.listing).filter(Boolean).map(normalizeListing);
+        return data
+          .map((d: any) => d.listing)
+          .filter(Boolean)
+          .filter((item: any) => !isDemoListing(item))
+          .map(normalizeListing);
       }
     } catch (e) {
       console.warn('Supabase getUserFavorites error:', e);
@@ -641,7 +690,9 @@ export async function getUserFavorites(userId: string): Promise<ListingWithDetai
   }
 
   const favSet = fallbackFavorites[userId] || new Set<string>();
-  return fallbackListings.filter((l) => favSet.has(l.id)).map(normalizeListing);
+  return fallbackListings
+    .filter((l) => !isDemoListing(l) && favSet.has(l.id))
+    .map(normalizeListing);
 }
 
 /**
