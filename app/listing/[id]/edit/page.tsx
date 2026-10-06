@@ -61,7 +61,7 @@ export default function EditListingPage() {
       setCategory(data.category);
       setCondition(data.condition);
       setLocation(data.location);
-      setPhone(data.phone);
+      setPhone(data.phone || '');
       setStatus(data.status);
 
       // Map images

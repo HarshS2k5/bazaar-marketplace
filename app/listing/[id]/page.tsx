@@ -13,7 +13,8 @@ import {
   CheckCircle, 
   ArrowLeft,
   ChevronRight,
-  Phone
+  Phone,
+  PhoneOff
 } from 'lucide-react';
 import { getListingById, getListings } from '@/lib/data/listings';
 import { formatPrice, formatDate, formatPhone } from '@/lib/utils';
@@ -169,18 +170,29 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
             </div>
 
             {/* Prominent Call Seller Section */}
-            <div className="pt-3 space-y-3">
-              <CallSellerButton
-                phone={listing.phone}
-                sellerName={listing.seller?.name || 'Seller'}
-              />
+            {(() => {
+              const sellerPhone = listing.seller?.phone?.trim() || listing.phone?.trim() || null;
+              const sellerName = listing.seller?.name?.trim() || 'Verified Seller';
+              const hasValidPhone = Boolean(sellerPhone && sellerPhone.replace(/\D/g, '').length >= 10);
 
-              <div className="text-center">
-                <p className="text-xs text-slate-500">
-                  Seller contact: <span className="font-semibold text-slate-800">{formatPhone(listing.phone)}</span>
-                </p>
-              </div>
-            </div>
+              return (
+                <div className="pt-3 space-y-3">
+                  <CallSellerButton
+                    phone={sellerPhone}
+                    sellerName={sellerName}
+                  />
+
+                  <div className="text-center">
+                    <p className="text-xs text-slate-500">
+                      Seller contact:{' '}
+                      <span className="font-semibold text-slate-800">
+                        {hasValidPhone ? formatPhone(sellerPhone) : 'Phone number unavailable'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Seller Profile Card */}
@@ -194,12 +206,12 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={listing.seller.avatar_url}
-                  alt={listing.seller.name}
+                  alt={listing.seller.name || 'Seller'}
                   className="w-12 h-12 rounded-full object-cover border border-slate-200"
                 />
               ) : (
                 <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-base">
-                  {listing.seller?.name ? listing.seller.name.charAt(0).toUpperCase() : 'U'}
+                  {listing.seller?.name ? listing.seller.name.charAt(0).toUpperCase() : 'S'}
                 </div>
               )}
 
@@ -217,6 +229,12 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
             <div className="text-xs text-slate-500 space-y-1 pt-1 border-t border-slate-100">
               <p>Member on Bazaar since {listing.seller?.created_at ? new Date(listing.seller.created_at).getFullYear() : '2025'}</p>
               <p>Location: {listing.seller?.location || listing.location}</p>
+              <p>
+                Direct Contact:{' '}
+                <span className="font-semibold text-slate-700">
+                  {formatPhone(listing.seller?.phone || listing.phone)}
+                </span>
+              </p>
             </div>
           </div>
 

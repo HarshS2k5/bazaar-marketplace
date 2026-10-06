@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Phone, ShieldAlert, Check, Copy, ExternalLink } from 'lucide-react';
+import { Phone, PhoneOff, ShieldAlert, Check, Copy, ExternalLink } from 'lucide-react';
 import { formatPhone, cleanPhoneForDialer } from '@/lib/utils';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 
 interface CallSellerButtonProps {
-  phone: string;
+  phone?: string | null;
   sellerName?: string;
   className?: string;
 }
@@ -16,8 +16,25 @@ export function CallSellerButton({ phone, sellerName = 'Seller', className }: Ca
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const formattedNumber = formatPhone(phone);
-  const telDialerUrl = `tel:${cleanPhoneForDialer(phone)}`;
+  const dialable = cleanPhoneForDialer(phone);
+  const isAvailable = Boolean(phone && dialable && dialable.replace(/\D/g, '').length >= 10);
+  const formattedNumber = isAvailable ? formatPhone(phone) : 'Phone number unavailable';
+  const telDialerUrl = isAvailable ? `tel:${dialable}` : '#';
+
+  if (!isAvailable) {
+    return (
+      <Button
+        disabled
+        variant="outline"
+        size="lg"
+        className={`w-full bg-slate-100 border-slate-200 text-slate-400 font-medium text-sm py-3.5 flex items-center justify-center gap-2 rounded-xl cursor-not-allowed ${className || ''}`}
+        title="Seller has not provided a contact phone number"
+      >
+        <PhoneOff className="w-4 h-4 text-slate-400" />
+        <span>Phone number unavailable</span>
+      </Button>
+    );
+  }
 
   const handleCopy = () => {
     navigator.clipboard.writeText(formattedNumber);

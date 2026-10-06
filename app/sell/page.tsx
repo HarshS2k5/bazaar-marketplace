@@ -27,7 +27,7 @@ import { CategorySlug, ItemCondition } from '@/types';
 
 export default function SellPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, updateProfile } = useAuth();
 
   const [images, setImages] = useState<ImageItem[]>([]);
   const [title, setTitle] = useState('');
@@ -167,11 +167,22 @@ export default function SellPage() {
             ? moderationResult.internalFlags.join(', ') 
             : 'Automated safety check passed',
           moderation_score: moderationResult.score,
-          seller: user,
+          seller: {
+            ...user,
+            phone: phone.trim(),
+            location: location.trim(),
+          },
           images: [],
         },
         uploadedUrls
       );
+
+      // Keep user's profile phone up to date if not already set or changed
+      try {
+        if (!user.phone || user.phone !== phone.trim()) {
+          await updateProfile({ phone: phone.trim(), location: location.trim() });
+        }
+      } catch {}
 
       // Record successful creation for anti-spam tracking
       recordListingSubmission(user.id, title, parseFloat(price));

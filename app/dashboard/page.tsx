@@ -18,12 +18,13 @@ import {
   TrendingUp,
   Clock,
   ShieldCheck,
-  XCircle
+  XCircle,
+  Phone
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getSellerListings, deleteListing, updateListing } from '@/lib/data/listings';
 import { ListingWithDetails, ListingStatus } from '@/types';
-import { formatPrice, formatDate } from '@/lib/utils';
+import { formatPrice, formatDate, formatPhone } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
@@ -279,10 +280,14 @@ function DashboardContent() {
                       {formatPrice(item.price)}
                     </p>
 
-                    <div className="flex items-center gap-3 text-xs text-slate-400">
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 pt-0.5">
+                      <span className="flex items-center gap-1 font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        <Phone className="w-3 h-3" />
+                        <span>{formatPhone(item.phone || user?.phone)}</span>
+                      </span>
                       <span>Posted {formatDate(item.created_at)}</span>
                       <span>•</span>
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1 text-slate-400">
                         <Eye className="w-3.5 h-3.5" />
                         <span>{item.views} views</span>
                       </span>

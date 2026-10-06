@@ -13,10 +13,15 @@ export function formatPrice(price: number): string {
   }).format(price);
 }
 
-export function formatPhone(phone: string): string {
+export function formatPhone(phone?: string | null): string {
+  if (!phone || typeof phone !== 'string' || !phone.trim()) {
+    return 'Phone number unavailable';
+  }
   // Strip non-digits except leading +
   const cleaned = phone.replace(/[^\d+]/g, '');
-  if (!cleaned) return phone;
+  if (!cleaned || cleaned.replace(/\D/g, '').length === 0) {
+    return 'Phone number unavailable';
+  }
 
   // If 10 digits Indian mobile
   if (cleaned.length === 10) {
@@ -29,7 +34,8 @@ export function formatPhone(phone: string): string {
   return phone;
 }
 
-export function cleanPhoneForDialer(phone: string): string {
+export function cleanPhoneForDialer(phone?: string | null): string {
+  if (!phone || typeof phone !== 'string') return '';
   const digits = phone.replace(/[^\d+]/g, '');
   if (digits.startsWith('+')) return digits;
   if (digits.length === 10) return `+91${digits}`;

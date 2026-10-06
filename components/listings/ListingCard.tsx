@@ -3,9 +3,9 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { MapPin, Clock } from 'lucide-react';
+import { MapPin, Clock, Phone, PhoneOff } from 'lucide-react';
 import { ListingWithDetails } from '@/types';
-import { formatPrice, formatDate } from '@/lib/utils';
+import { formatPrice, formatDate, formatPhone, cleanPhoneForDialer } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { FavoriteButton } from './FavoriteButton';
 
@@ -14,6 +14,13 @@ interface ListingCardProps {
 }
 
 export function ListingCard({ listing }: ListingCardProps) {
+  const seller = listing.seller;
+  const sellerPhone = seller?.phone?.trim() || listing.phone?.trim() || null;
+  const sellerName = seller?.name?.trim() || 'Verified Seller';
+  const hasValidPhone = Boolean(sellerPhone && sellerPhone.replace(/\D/g, '').length >= 10);
+  const formattedPhone = hasValidPhone ? formatPhone(sellerPhone) : 'Phone number unavailable';
+  const dialerUrl = hasValidPhone ? `tel:${cleanPhoneForDialer(sellerPhone)}` : '#';
+
   const primaryImage =
     listing.images?.find((img) => img.is_primary)?.image_url ||
     listing.images?.[0]?.image_url ||
@@ -69,6 +76,52 @@ export function ListingCard({ listing }: ListingCardProps) {
               {listing.title}
             </h3>
           </Link>
+        </div>
+
+        {/* Seller Info & Contact Action */}
+        <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {seller?.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={seller.avatar_url}
+                alt={sellerName}
+                className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center shrink-0">
+                {sellerName.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-slate-800 truncate" title={sellerName}>
+                {sellerName}
+              </p>
+              <p className="text-[11px] text-slate-500 truncate" title={formattedPhone}>
+                {formattedPhone}
+              </p>
+            </div>
+          </div>
+
+          {hasValidPhone ? (
+            <a
+              href={dialerUrl}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 text-xs font-semibold shadow-2xs hover:shadow-xs transition-all shrink-0"
+              title={`Call ${sellerName} (${formattedPhone})`}
+            >
+              <Phone className="w-3.5 h-3.5" />
+              <span>Call</span>
+            </a>
+          ) : (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-100 text-slate-400 text-[11px] font-medium shrink-0 cursor-not-allowed"
+              title="Phone number unavailable"
+            >
+              <PhoneOff className="w-3 h-3" />
+              <span>Unavailable</span>
+            </span>
+          )}
         </div>
 
         {/* Footer Meta: Location & Relative Date */}

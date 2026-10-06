@@ -27,6 +27,39 @@ let fallbackReports: Report[] = [
 ];
 
 /**
+ * Normalizes a listing ensuring the seller and phone number relationship
+ * is strictly preserved for that specific listing.
+ * If phone is missing, it is set to null (never fallback to a demo number or another seller).
+ */
+export function normalizeListing(item: any): ListingWithDetails {
+  if (!item) return item;
+  const sellerObj = Array.isArray(item.seller) ? item.seller[0] : item.seller;
+  const sellerPhone = sellerObj?.phone?.trim() || item.phone?.trim() || null;
+  const sellerName = sellerObj?.name?.trim() || 'Verified Seller';
+  const sellerLocation = sellerObj?.location?.trim() || item.location?.trim() || 'Local Seller';
+
+  return {
+    ...item,
+    phone: sellerPhone,
+    seller: sellerObj
+      ? {
+          ...sellerObj,
+          name: sellerName,
+          phone: sellerPhone,
+        }
+      : {
+          id: item.seller_id,
+          name: sellerName,
+          email: '',
+          phone: sellerPhone,
+          location: sellerLocation,
+          avatar_url: null,
+          role: 'user',
+        },
+  };
+}
+
+/**
  * Fetch listings with optional search, category, price, condition and sort filters.
  * IMPORTANT SECURITY RULE: Only 'approved' or 'active' listings are returned publicly!
  */
@@ -38,7 +71,7 @@ export async function getListings(filters: FilterOptions = {}): Promise<ListingW
         .from('listings')
         .select(`
           *,
-          seller:profiles(*),
+          seller:profiles!seller_id(*),
           images:listing_images(*)
         `);
 
@@ -82,7 +115,7 @@ export async function getListings(filters: FilterOptions = {}): Promise<ListingW
       if (error) {
         console.warn('Supabase getListings error, using fallback:', error.message);
       } else if (data && data.length > 0) {
-        return data as unknown as ListingWithDetails[];
+        return (data as any[]).map(normalizeListing);
       }
     } catch (e) {
       console.warn('Supabase query failed, falling back:', e);
@@ -135,7 +168,7 @@ export async function getListings(filters: FilterOptions = {}): Promise<ListingW
     results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
-  return results;
+  return results.map(normalizeListing);
 }
 
 /**
@@ -150,7 +183,7 @@ export async function getListingById(idOrSlug: string): Promise<ListingWithDetai
         .from('listings')
         .select(`
           *,
-          seller:profiles(*),
+          seller:profiles!seller_id(*),
           images:listing_images(*)
         `);
 
@@ -165,7 +198,7 @@ export async function getListingById(idOrSlug: string): Promise<ListingWithDetai
         try {
           await supabase.from('listings').update({ views: (data.views || 0) + 1 }).eq('id', data.id);
         } catch {}
-        return data as unknown as ListingWithDetails;
+        return normalizeListing(data);
       }
     } catch (e) {
       console.warn('Supabase getListingById failed, trying fallback:', e);
@@ -183,7 +216,7 @@ export async function getListingById(idOrSlug: string): Promise<ListingWithDetai
 
   if (found) {
     found.views += 1;
-    return found;
+    return normalizeListing(found);
   }
   return null;
 }
@@ -199,20 +232,21 @@ export async function getSellerListings(sellerId: string): Promise<ListingWithDe
         .from('listings')
         .select(`
           *,
+          seller:profiles!seller_id(*),
           images:listing_images(*)
         `)
         .eq('seller_id', sellerId)
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        return data as unknown as ListingWithDetails[];
+        return (data as any[]).map(normalizeListing);
       }
     } catch (e) {
       console.warn('Supabase getSellerListings error:', e);
     }
   }
 
-  return fallbackListings.filter((item) => item.seller_id === sellerId);
+  return fallbackListings.filter((item) => item.seller_id === sellerId).map(normalizeListing);
 }
 
 /**
@@ -265,7 +299,20 @@ export async function createListing(
         await supabase.from('listing_images').insert(imagesToInsert);
       }
 
-      return await getListingById(newId) || {
+      // Keep profiles.phone in sync if seller provided phone
+      if (listingData.phone && listingData.seller_id) {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ phone: listingData.phone, location: listingData.location })
+            .eq('id', listingData.seller_id);
+        } catch {}
+      }
+
+      const created = await getListingById(newId);
+      if (created) return normalizeListing(created);
+
+      return normalizeListing({
         ...listing,
         images: imageUrls.map((url, idx) => ({
           id: `img-${newId}-${idx}`,
@@ -274,7 +321,7 @@ export async function createListing(
           is_primary: idx === 0,
           sort_order: idx,
         })),
-      };
+      });
     } catch (e: any) {
       console.error('Supabase createListing error:', e);
       throw e;
@@ -282,7 +329,7 @@ export async function createListing(
   }
 
   // Fallback creation
-  const createdListing: ListingWithDetails = {
+  const createdListing: ListingWithDetails = normalizeListing({
     ...listingData,
     id: newId,
     status,
@@ -295,7 +342,7 @@ export async function createListing(
       is_primary: idx === 0,
       sort_order: idx,
     })),
-  };
+  });
 
   fallbackListings.unshift(createdListing);
   return createdListing;
@@ -359,20 +406,20 @@ export async function updateListing(
   const index = fallbackListings.findIndex((item) => item.id === id);
   if (index !== -1) {
     const existing = fallbackListings[index];
-    const updated: ListingWithDetails = {
+    const updated: ListingWithDetails = normalizeListing({
       ...existing,
       ...updateData,
       updated_at: new Date().toISOString(),
-    };
-    if (newImages) {
-      updated.images = newImages.map((url, idx) => ({
-        id: `img-${id}-${idx}`,
-        listing_id: id,
-        image_url: url,
-        is_primary: idx === 0,
-        sort_order: idx,
-      }));
-    }
+      images: newImages
+        ? newImages.map((url, idx) => ({
+            id: `img-${id}-${idx}`,
+            listing_id: id,
+            image_url: url,
+            is_primary: idx === 0,
+            sort_order: idx,
+          }))
+        : existing.images,
+    });
     fallbackListings[index] = updated;
     return updated;
   }
@@ -579,14 +626,14 @@ export async function getUserFavorites(userId: string): Promise<ListingWithDetai
         .select(`
           listing:listings(
             *,
-            seller:profiles(*),
+            seller:profiles!seller_id(*),
             images:listing_images(*)
           )
         `)
         .eq('user_id', userId);
 
       if (!error && data) {
-        return data.map((d: any) => d.listing).filter(Boolean);
+        return data.map((d: any) => d.listing).filter(Boolean).map(normalizeListing);
       }
     } catch (e) {
       console.warn('Supabase getUserFavorites error:', e);
@@ -594,7 +641,7 @@ export async function getUserFavorites(userId: string): Promise<ListingWithDetai
   }
 
   const favSet = fallbackFavorites[userId] || new Set<string>();
-  return fallbackListings.filter((l) => favSet.has(l.id));
+  return fallbackListings.filter((l) => favSet.has(l.id)).map(normalizeListing);
 }
 
 /**

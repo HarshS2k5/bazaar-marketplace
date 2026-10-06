@@ -63,7 +63,7 @@ export interface Listing {
   category: CategorySlug;
   condition: ItemCondition;
   location: string;
-  phone: string;
+  phone?: string | null;
   status: ListingStatus;
   views: number;
   moderation_notes?: string | null;
