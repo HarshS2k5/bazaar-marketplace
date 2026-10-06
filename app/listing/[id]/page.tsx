@@ -224,13 +224,21 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
           <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4.5 space-y-2.5">
             <div className="flex items-center gap-2 text-amber-900 font-semibold text-sm">
               <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0" />
-              <span>Safety Guarantee Checklist</span>
+              <span>Buyer Safety Reminder</span>
             </div>
+            <p className="text-xs font-semibold text-amber-950">
+              Stay safe: Never share passwords, OTPs, banking PINs, or sensitive personal information with another user.
+            </p>
             <ul className="text-xs text-amber-900/90 space-y-1.5 pl-5 list-disc leading-relaxed">
-              <li>Meet in a safe, busy, public spot to test the item.</li>
-              <li>Inspect physical condition & working order before paying.</li>
-              <li><strong>Never share OTPs, banking PINs or transfer money in advance.</strong></li>
+              <li>Always meet in a safe, public place to inspect the item in person.</li>
+              <li>Inspect condition & test working order before handing over payment.</li>
+              <li>Never wire advance token money via UPI or cash transfer.</li>
             </ul>
+            <div className="pt-1 border-t border-amber-200/60">
+              <Link href="/rules" className="text-[11px] font-bold text-amber-900 hover:underline">
+                View All Marketplace Safety Rules →
+              </Link>
+            </div>
           </div>
 
           {/* Report & Share Buttons */}

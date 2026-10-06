@@ -22,7 +22,13 @@ export interface Category {
 
 export type ItemCondition = 'Brand New' | 'Like New' | 'Excellent' | 'Good' | 'Fair';
 
-export type ListingStatus = 'active' | 'sold' | 'archived';
+export type ListingStatus = 
+  | 'approved'
+  | 'pending'
+  | 'rejected'
+  | 'sold'
+  | 'removed'
+  | 'active'; // Legacy compatibility for approved
 
 export interface Profile {
   id: string;
@@ -32,6 +38,7 @@ export interface Profile {
   location?: string | null;
   avatar_url?: string | null;
   role?: 'user' | 'admin';
+  is_suspended?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -59,6 +66,8 @@ export interface Listing {
   phone: string;
   status: ListingStatus;
   views: number;
+  moderation_notes?: string | null;
+  moderation_score?: number;
   created_at: string;
   updated_at?: string;
 }
@@ -76,15 +85,25 @@ export interface Favorite {
   created_at: string;
 }
 
+export type ReportReason =
+  | 'Prohibited item'
+  | 'Illegal item'
+  | 'Inappropriate content'
+  | 'Scam or fraud'
+  | 'Counterfeit item'
+  | 'Misleading information'
+  | 'Dangerous item'
+  | 'Other';
+
 export interface Report {
   id: string;
   reporter_id: string;
   listing_id: string;
-  reason: string;
-  description: string;
+  reason: ReportReason | string;
+  description?: string;
   status: 'pending' | 'resolved' | 'dismissed';
   created_at: string;
-  listing?: Listing;
+  listing?: ListingWithDetails;
   reporter?: Profile;
 }
 
@@ -96,4 +115,12 @@ export interface FilterOptions {
   condition?: string;
   location?: string;
   sortBy?: 'newest' | 'price-asc' | 'price-desc' | 'popular';
+  includePending?: boolean;
+}
+
+export interface ModerationResult {
+  status: 'approved' | 'pending' | 'rejected';
+  score: number; // 0 - 100 risk score
+  publicMessage: string;
+  internalFlags: string[];
 }

@@ -17,7 +17,7 @@ export function Footer() {
               <div>
                 <h4 className="text-white font-semibold text-sm">Safe & Verified Community</h4>
                 <p className="text-slate-400 text-xs mt-1 leading-relaxed">
-                  Always inspect items in person in daylight. Never pay money upfront or share confidential banking OTPs.
+                  Stay safe: Never share passwords, OTPs, banking PINs, or sensitive personal information with another user.
                 </p>
               </div>
             </div>
@@ -122,6 +122,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/rules" className="text-slate-400 hover:text-white transition-colors">
+                  Marketplace Rules
+                </Link>
+              </li>
+              <li>
                 <Link href="/about" className="text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1.5">
                   <span>About Harsh Sisodia</span>
                   <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded">Creator</span>
@@ -135,9 +140,9 @@ export function Footer() {
         <div className="border-t border-slate-800 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <p>© {new Date().getFullYear()} Bazaar Marketplace. Built by Harsh Sisodia.</p>
           <p className="flex items-center gap-4">
-            <Link href="/about" className="text-slate-400 hover:text-emerald-400">About Founder</Link>
+            <Link href="/rules" className="text-slate-400 hover:text-emerald-400">Marketplace Rules</Link>
             <span>•</span>
-            <span>Safety Guidelines</span>
+            <Link href="/about" className="text-slate-400 hover:text-emerald-400">About Founder</Link>
             <span>•</span>
             <span>Terms of Service</span>
             <span>•</span>

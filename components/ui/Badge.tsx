@@ -34,14 +34,21 @@ export function Badge({ children, variant = 'default', condition, status, classN
   } else if (status) {
     switch (status) {
       case 'active':
+      case 'approved':
         colorClasses = 'bg-emerald-100 text-emerald-800';
+        break;
+      case 'pending':
+        colorClasses = 'bg-amber-100 text-amber-800 border border-amber-200';
+        break;
+      case 'rejected':
+      case 'removed':
+        colorClasses = 'bg-rose-100 text-rose-800 border border-rose-200';
         break;
       case 'sold':
         colorClasses = 'bg-purple-100 text-purple-800';
         break;
-      case 'archived':
+      default:
         colorClasses = 'bg-slate-200 text-slate-700';
-        break;
     }
   } else {
     switch (variant) {

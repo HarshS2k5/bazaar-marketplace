@@ -1,4 +1,4 @@
-import { FilterOptions, ListingWithDetails, Profile, Report } from '@/types';
+import { FilterOptions, ListingWithDetails, Profile, Report, ListingStatus } from '@/types';
 import { INITIAL_LISTINGS, SEED_PROFILES } from './mock-data';
 import { createClient as createBrowserSupabase } from '@/lib/supabase/client';
 
@@ -10,13 +10,27 @@ export function isSupabaseConfigured(): boolean {
 
 // In-memory cache for development/offline fallback state
 let fallbackListings: ListingWithDetails[] = [...INITIAL_LISTINGS];
+let fallbackProfiles: Profile[] = [...SEED_PROFILES];
 let fallbackFavorites: { [userId: string]: Set<string> } = {
   'test-user': new Set<string>(['a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d']),
 };
-let fallbackReports: Report[] = [];
+let fallbackReports: Report[] = [
+  {
+    id: 'rep-seed-1',
+    reporter_id: '11111111-1111-1111-1111-111111111111',
+    listing_id: 'c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f',
+    reason: 'Misleading information',
+    description: 'Seller claims bike was bought in 2024 but frame geometry matches 2021 model.',
+    status: 'pending',
+    created_at: new Date(Date.now() - 3600000).toISOString(),
+    listing: fallbackListings[2],
+    reporter: SEED_PROFILES[0],
+  }
+];
 
 /**
- * Fetch listings with optional search, category, price, condition and sort filters
+ * Fetch listings with optional search, category, price, condition and sort filters.
+ * IMPORTANT SECURITY RULE: Only 'approved' or 'active' listings are returned publicly!
  */
 export async function getListings(filters: FilterOptions = {}): Promise<ListingWithDetails[]> {
   if (isSupabaseConfigured()) {
@@ -28,8 +42,13 @@ export async function getListings(filters: FilterOptions = {}): Promise<ListingW
           *,
           seller:profiles(*),
           images:listing_images(*)
-        `)
-        .eq('status', 'active');
+        `);
+
+      if (filters.includePending) {
+        query = query.eq('status', 'pending');
+      } else {
+        query = query.in('status', ['active', 'approved']);
+      }
 
       if (filters.category) {
         query = query.eq('category', filters.category);
@@ -47,7 +66,6 @@ export async function getListings(filters: FilterOptions = {}): Promise<ListingW
         query = query.ilike('location', `%${filters.location}%`);
       }
       if (filters.query) {
-        // Search title or description
         query = query.or(`title.ilike.%${filters.query}%,description.ilike.%${filters.query}%,location.ilike.%${filters.query}%`);
       }
 
@@ -74,7 +92,12 @@ export async function getListings(filters: FilterOptions = {}): Promise<ListingW
   }
 
   // Fallback filter implementation
-  let results = [...fallbackListings].filter((item) => item.status === 'active');
+  let results = [...fallbackListings].filter((item) => {
+    if (filters.includePending) {
+      return item.status === 'pending';
+    }
+    return item.status === 'active' || item.status === 'approved';
+  });
 
   if (filters.category) {
     results = results.filter((item) => item.category === filters.category);
@@ -125,7 +148,6 @@ export async function getListingById(idOrSlug: string): Promise<ListingWithDetai
     try {
       const supabase = createBrowserSupabase();
       
-      // Try by ID first, then slug
       let query = supabase
         .from('listings')
         .select(`
@@ -142,7 +164,6 @@ export async function getListingById(idOrSlug: string): Promise<ListingWithDetai
 
       const { data, error } = await query.single();
       if (!error && data) {
-        // Increment views
         try {
           await supabase.from('listings').update({ views: (data.views || 0) + 1 }).eq('id', data.id);
         } catch {}
@@ -170,7 +191,7 @@ export async function getListingById(idOrSlug: string): Promise<ListingWithDetai
 }
 
 /**
- * Fetch listings by seller ID
+ * Fetch listings by seller ID (includes pending, approved, rejected, sold)
  */
 export async function getSellerListings(sellerId: string): Promise<ListingWithDetails[]> {
   if (isSupabaseConfigured()) {
@@ -197,7 +218,7 @@ export async function getSellerListings(sellerId: string): Promise<ListingWithDe
 }
 
 /**
- * Create listing
+ * Create listing with moderation status
  */
 export async function createListing(
   listingData: Omit<ListingWithDetails, 'id' | 'created_at' | 'views'>,
@@ -205,6 +226,7 @@ export async function createListing(
 ): Promise<ListingWithDetails> {
   const newId = crypto.randomUUID();
   const createdDate = new Date().toISOString();
+  const status = listingData.status || 'approved';
 
   if (isSupabaseConfigured()) {
     try {
@@ -222,8 +244,10 @@ export async function createListing(
           condition: listingData.condition,
           location: listingData.location,
           phone: listingData.phone,
-          status: 'active',
+          status,
           views: 0,
+          moderation_notes: listingData.moderation_notes || null,
+          moderation_score: listingData.moderation_score || 0,
         })
         .select()
         .single();
@@ -263,6 +287,7 @@ export async function createListing(
   const createdListing: ListingWithDetails = {
     ...listingData,
     id: newId,
+    status,
     views: 0,
     created_at: createdDate,
     images: imageUrls.map((url, idx) => ({
@@ -279,7 +304,7 @@ export async function createListing(
 }
 
 /**
- * Update listing
+ * Update listing (Secured against illegal client-side status escalation)
  */
 export async function updateListing(
   id: string,
@@ -289,25 +314,32 @@ export async function updateListing(
   if (isSupabaseConfigured()) {
     try {
       const supabase = createBrowserSupabase();
+      const updatePayload: any = {
+        title: updateData.title,
+        description: updateData.description,
+        price: updateData.price,
+        category: updateData.category,
+        condition: updateData.condition,
+        location: updateData.location,
+        phone: updateData.phone,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (updateData.status) {
+        updatePayload.status = updateData.status;
+      }
+      if (updateData.moderation_notes) {
+        updatePayload.moderation_notes = updateData.moderation_notes;
+      }
+
       const { error } = await supabase
         .from('listings')
-        .update({
-          title: updateData.title,
-          description: updateData.description,
-          price: updateData.price,
-          category: updateData.category,
-          condition: updateData.condition,
-          location: updateData.location,
-          phone: updateData.phone,
-          status: updateData.status,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq('id', id);
 
       if (error) throw new Error(error.message);
 
       if (newImages && newImages.length > 0) {
-        // Delete previous and insert new
         await supabase.from('listing_images').delete().eq('listing_id', id);
         const imagesToInsert = newImages.map((url, idx) => ({
           listing_id: id,
@@ -370,13 +402,124 @@ export async function deleteListing(id: string): Promise<boolean> {
 }
 
 /**
- * Toggle listing favorite
+ * Admin Moderation Actions
+ */
+export async function getPendingListings(): Promise<ListingWithDetails[]> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createBrowserSupabase();
+      const { data, error } = await supabase
+        .from('listings')
+        .select(`
+          *,
+          seller:profiles(*),
+          images:listing_images(*)
+        `)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) return data as unknown as ListingWithDetails[];
+    } catch (e) {
+      console.warn('Supabase getPendingListings error:', e);
+    }
+  }
+
+  return fallbackListings.filter((l) => l.status === 'pending');
+}
+
+export async function approveListing(id: string): Promise<boolean> {
+  const updated = await updateListing(id, { 
+    status: 'approved', 
+    moderation_notes: 'Approved by moderator' 
+  });
+  return Boolean(updated);
+}
+
+export async function rejectListing(id: string, reason: string): Promise<boolean> {
+  const updated = await updateListing(id, { 
+    status: 'rejected', 
+    moderation_notes: reason 
+  });
+  return Boolean(updated);
+}
+
+export async function removeListing(id: string): Promise<boolean> {
+  const updated = await updateListing(id, { 
+    status: 'removed', 
+    moderation_notes: 'Taken down by moderator' 
+  });
+  return Boolean(updated);
+}
+
+export async function getUsersList(): Promise<Profile[]> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createBrowserSupabase();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) return data as Profile[];
+    } catch (e) {
+      console.warn('Supabase getUsersList error:', e);
+    }
+  }
+
+  return fallbackProfiles;
+}
+
+export async function setUserSuspension(userId: string, isSuspended: boolean): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createBrowserSupabase();
+      await supabase.from('profiles').update({ is_suspended: isSuspended }).eq('id', userId);
+      if (isSuspended) {
+        // Automatically hide listings of suspended user
+        await supabase.from('listings').update({ status: 'removed' }).eq('seller_id', userId);
+      }
+      return true;
+    } catch (e) {
+      console.error('Supabase setUserSuspension error:', e);
+      return false;
+    }
+  }
+
+  const p = fallbackProfiles.find((u) => u.id === userId);
+  if (p) {
+    p.is_suspended = isSuspended;
+    if (isSuspended) {
+      fallbackListings.forEach((l) => {
+        if (l.seller_id === userId) l.status = 'removed';
+      });
+    }
+  }
+  return true;
+}
+
+export async function resolveReport(reportId: string, resolution: 'resolved' | 'dismissed'): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createBrowserSupabase();
+      await supabase.from('reports').update({ status: resolution }).eq('id', reportId);
+      return true;
+    } catch (e) {
+      console.warn('Supabase resolveReport error:', e);
+    }
+  }
+
+  const r = fallbackReports.find((rep) => rep.id === reportId);
+  if (r) r.status = resolution;
+  return true;
+}
+
+/**
+ * Favorites
  */
 export async function toggleFavorite(listingId: string, userId: string): Promise<boolean> {
   if (isSupabaseConfigured()) {
     try {
       const supabase = createBrowserSupabase();
-      // Check if already favorited
       const { data } = await supabase
         .from('favorites')
         .select('id')
@@ -409,9 +552,6 @@ export async function toggleFavorite(listingId: string, userId: string): Promise
   }
 }
 
-/**
- * Check if a listing is favorited
- */
 export async function isFavorite(listingId: string, userId: string): Promise<boolean> {
   if (isSupabaseConfigured()) {
     try {
@@ -432,9 +572,6 @@ export async function isFavorite(listingId: string, userId: string): Promise<boo
   return fallbackFavorites[userId]?.has(listingId) || false;
 }
 
-/**
- * Get user favorites
- */
 export async function getUserFavorites(userId: string): Promise<ListingWithDetails[]> {
   if (isSupabaseConfigured()) {
     try {
@@ -469,14 +606,14 @@ export async function createReport(
   reporterId: string,
   listingId: string,
   reason: string,
-  description: string
+  description?: string
 ): Promise<Report> {
   const newReport: Report = {
     id: crypto.randomUUID(),
     reporter_id: reporterId,
     listing_id: listingId,
     reason,
-    description,
+    description: description || '',
     status: 'pending',
     created_at: new Date().toISOString(),
   };
@@ -490,7 +627,7 @@ export async function createReport(
     }
   }
 
-  fallbackReports.push(newReport);
+  fallbackReports.unshift(newReport);
   return newReport;
 }
 
@@ -519,6 +656,6 @@ export async function getReports(): Promise<Report[]> {
   return fallbackReports.map((r) => ({
     ...r,
     listing: fallbackListings.find((l) => l.id === r.listing_id),
-    reporter: SEED_PROFILES[0],
+    reporter: fallbackProfiles.find((p) => p.id === r.reporter_id) || SEED_PROFILES[0],
   }));
 }

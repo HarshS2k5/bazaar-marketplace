@@ -8,11 +8,12 @@ import {
   Sparkles, 
   CheckCircle, 
   AlertCircle, 
-  Tag, 
+  ShieldAlert, 
+  ShieldCheck, 
   MapPin, 
   Phone, 
-  Layers, 
-  HelpCircle 
+  HelpCircle,
+  ExternalLink 
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { CATEGORIES, CONDITIONS } from '@/lib/constants';
@@ -20,6 +21,8 @@ import { Button } from '@/components/ui/Button';
 import { ImageUploader, ImageItem } from '@/components/listings/ImageUploader';
 import { uploadListingImage } from '@/lib/supabase/storage';
 import { createListing } from '@/lib/data/listings';
+import { moderateListingContent } from '@/lib/moderation';
+import { checkListingSpam, recordListingSubmission } from '@/lib/security/rate-limit';
 import { CategorySlug, ItemCondition } from '@/types';
 
 export default function SellPage() {
@@ -34,10 +37,12 @@ export default function SellPage() {
   const [condition, setCondition] = useState<ItemCondition>('Like New');
   const [location, setLocation] = useState('');
   const [phone, setPhone] = useState('');
+  const [agreedToRules, setAgreedToRules] = useState(false);
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [moderationWarning, setModerationWarning] = useState<string | null>(null);
 
   // Autofill user details if available
   useEffect(() => {
@@ -86,6 +91,10 @@ export default function SellPage() {
       errs.phone = 'Please provide a valid 10-digit mobile number for buyers to call.';
     }
 
+    if (!agreedToRules) {
+      errs.rules = 'You must confirm that your item complies with the marketplace rules.';
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -97,11 +106,40 @@ export default function SellPage() {
 
     setIsSubmitting(true);
     setSubmitError(null);
+    setModerationWarning(null);
 
+    // 1. Anti-spam & duplicate check
+    const spamCheck = checkListingSpam(user.id, title, parseFloat(price));
+    if (!spamCheck.allowed) {
+      setSubmitError(spamCheck.reason || 'Spam prevention limit reached.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    // 2. Multi-layer content moderation inspection
     try {
-      // 1. Process uploaded images
+      const moderationResult = await moderateListingContent({
+        title: title.trim(),
+        description: description.trim(),
+        category,
+        price: parseFloat(price),
+        location: location.trim(),
+        phone: phone.trim(),
+        images: images.map((i) => i.file || i.previewUrl),
+      });
+
+      // If rejected by safety policy: block submission and let seller revise
+      if (moderationResult.status === 'rejected') {
+        setSubmitError(moderationResult.publicMessage);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // If borderline: will be saved as 'pending' review
+      const targetStatus = moderationResult.status === 'pending' ? 'pending' : 'approved';
+
+      // 3. Process image uploads
       const uploadedUrls: string[] = [];
-      // Re-sort images so primary is first
       const sortedImages = [...images].sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
 
       for (const item of sortedImages) {
@@ -113,7 +151,7 @@ export default function SellPage() {
         }
       }
 
-      // 2. Create listing
+      // 4. Create listing with moderation metadata
       const created = await createListing(
         {
           seller_id: user.id,
@@ -124,15 +162,26 @@ export default function SellPage() {
           condition,
           location: location.trim(),
           phone: phone.trim(),
-          status: 'active',
+          status: targetStatus,
+          moderation_notes: moderationResult.internalFlags.length > 0 
+            ? moderationResult.internalFlags.join(', ') 
+            : 'Automated safety check passed',
+          moderation_score: moderationResult.score,
           seller: user,
           images: [],
         },
         uploadedUrls
       );
 
-      // 3. Redirect to the newly created listing page
-      router.push(`/listing/${created.slug || created.id}`);
+      // Record successful creation for anti-spam tracking
+      recordListingSubmission(user.id, title, parseFloat(price));
+
+      // 5. Redirection based on moderation status
+      if (targetStatus === 'pending') {
+        router.push('/dashboard?notice=pending_review');
+      } else {
+        router.push(`/listing/${created.slug || created.id}`);
+      }
     } catch (err: any) {
       console.error('Failed to create listing:', err);
       setSubmitError(err.message || 'Something went wrong while publishing your ad.');
@@ -164,16 +213,20 @@ export default function SellPage() {
           Sell an Item
         </h1>
         <p className="text-sm text-slate-500 mt-1">
-          Post your classified ad in seconds. Direct phone buyers will reach out to you.
+          Post your classified ad in seconds. All listings are verified for community safety.
         </p>
       </div>
 
+      {/* Moderation Rejection Error Banner */}
       {submitError && (
-        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3 text-sm text-rose-800">
-          <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold">Unable to publish listing</p>
-            <p className="text-xs mt-0.5 text-rose-700">{submitError}</p>
+        <div className="p-5 bg-rose-50 border border-rose-200 rounded-3xl flex items-start gap-3.5 text-sm text-rose-900 animate-in fade-in">
+          <ShieldAlert className="w-6 h-6 text-rose-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold text-rose-950">Listing Could Not Be Approved</p>
+            <p className="text-xs leading-relaxed text-rose-800">{submitError}</p>
+            <p className="text-[11px] text-rose-600 pt-1 font-semibold">
+              Please review your title, description, and photos, then submit again.
+            </p>
           </div>
         </div>
       )}
@@ -186,7 +239,7 @@ export default function SellPage() {
           <div>
             <h2 className="text-base font-bold text-slate-900">1. Photos</h2>
             <p className="text-xs text-slate-500">
-              Clear photos increase your buyer response rate by up to 5x.
+              Photos are automatically checked for quality and content safety.
             </p>
           </div>
 
@@ -364,10 +417,40 @@ export default function SellPage() {
           </div>
         </div>
 
+        {/* Section 4: Mandatory Marketplace Safety Agreement */}
+        <div className="pt-6 border-t border-slate-100 space-y-3">
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="rulesAgreement"
+              checked={agreedToRules}
+              onChange={(e) => setAgreedToRules(e.target.checked)}
+              className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 mt-1 shrink-0 cursor-pointer"
+            />
+            <label htmlFor="rulesAgreement" className="text-xs sm:text-sm text-slate-700 leading-relaxed cursor-pointer select-none">
+              <strong>By posting this listing, you agree that your item follows our marketplace rules.</strong> Prohibited, illegal, dangerous, or inappropriate items are not allowed.{' '}
+              <Link
+                href="/rules"
+                target="_blank"
+                className="text-emerald-700 underline font-semibold hover:text-emerald-800 inline-flex items-center gap-0.5 ml-1"
+              >
+                <span>Read Full Marketplace Rules</span>
+                <ExternalLink className="w-3 h-3" />
+              </Link>
+            </label>
+          </div>
+          {errors.rules && (
+            <p className="text-xs text-rose-600 font-medium flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>{errors.rules}</span>
+            </p>
+          )}
+        </div>
+
         {/* Submit Button */}
         <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-slate-400 text-center sm:text-left">
-            By publishing, you agree to Bazaar&apos;s Terms of Service and Marketplace Safety Policies.
+            Items pass through automated moderation before public indexation.
           </p>
 
           <Button
@@ -375,7 +458,7 @@ export default function SellPage() {
             variant="primary"
             size="lg"
             isLoading={isSubmitting}
-            className="w-full sm:w-auto px-8"
+            className="w-full sm:w-auto px-8 font-bold"
           >
             Publish Listing
           </Button>

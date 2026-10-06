@@ -133,6 +133,14 @@ export function Navbar() {
               )}
             </div>
 
+            {/* Rules Link */}
+            <Link
+              href="/rules"
+              className="text-sm font-medium text-slate-700 hover:text-emerald-600 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors hidden md:block"
+            >
+              Rules
+            </Link>
+
             {/* About Page Link */}
             <Link
               href="/about"
@@ -313,6 +321,14 @@ export function Navbar() {
           </div>
 
           <div className="border-t border-slate-100 pt-3 space-y-2">
+            <Link
+              href="/rules"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex items-center gap-2 text-sm text-slate-700 py-1.5 font-medium"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>Marketplace Rules</span>
+            </Link>
             <Link
               href="/about"
               onClick={() => setIsMobileMenuOpen(false)}

@@ -95,15 +95,61 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ### Tables
 | Table | Description | RLS Policy |
 | :--- | :--- | :--- |
-| `profiles` | User profiles with name, phone, avatar, location, role | Public read, owner update |
-| `listings` | Classified items for sale with title, price, category, condition, phone | Public read for active, owner/admin full write |
+| `profiles` | User profiles with name, phone, avatar, location, role, suspension status | Public read, owner update |
+| `listings` | Classified items for sale with title, price, category, condition, phone, status (`approved`, `pending`, `rejected`, `sold`, `removed`) | Public read for `approved`/`active`, owner/admin write, anti-tamper triggers |
 | `listing_images` | High-res item photos with sort order and primary flag | Public read, listing owner insert/delete |
 | `favorites` | User saved wishlist items | Private to each authenticated user |
 | `reports` | Community fraud flags and inappropriate item reports | Authenticated insert, Admin read/moderate |
 
+### Database Migrations
+1. `supabase/migrations/001_initial_schema.sql`: Core schema, foreign keys, full-text indexes, profiles trigger, and baseline RLS policies.
+2. `supabase/migrations/002_content_safety.sql`: Extends listing status lifecycle (`pending`, `approved`, `rejected`, `sold`, `removed`), introduces user account suspension flags, builds automated moderation audit logs, and adds anti-tamper RLS triggers so regular sellers cannot arbitrarily elevate `pending` or `rejected` listings to `approved`.
+
 ### Storage Bucket
 - **Bucket**: `listing-images` (Public read enabled)
 - **Policies**: Authenticated users can upload to `listings/<userId>/...` and delete their own uploads.
+
+---
+
+## 🛡️ Content Safety & Marketplace Moderation System
+
+Bazaar incorporates a robust, multi-layered moderation pipeline designed to prevent illegal, dangerous, or fraudulent listings before they are made public:
+
+### 1. Multi-Layer Automated Text Screening
+- **Prohibited Catalog**: Blocks narcotics/drugs, firearms/weapons, explosives, adult/sexually explicit items, prostitution/solicitation, counterfeit goods, fraudulent IDs, malware/hacking tools, hazardous chemicals, and wire fraud schemes.
+- **Obfuscation & Leetspeak Resistance**: Automatically normalizes letter substitutions (e.g., `p0rn`, `k0ke`, `w33d`, `wh0re`, `f4ke`) before scanning.
+- **Category Mismatch & Anomaly Detection**: Flags high-risk keywords submitted under deceptive or unrelated categories (e.g., a weapon listed under "Vehicles" or narcotics listed under "Electronics").
+
+### 2. Client-Side & In-Flight Image Scanner
+- **Magic Bytes Validation**: Verifies genuine file signatures (JPEG `FF D8 FF`, PNG `89 50 4E 47`, WebP `52 49 46 46`) to prevent spoofed file extensions.
+- **Computer Vision Canvas Analysis**: Client-side canvas heuristics examine color distribution, saturation, and skin tone ratios to detect explicit or violent imagery before network transmission.
+
+### 3. Seller Agreement & Pending Review Pipeline
+- Sellers are required to review and accept the marketplace safety terms linking to the comprehensive [`/rules`](/rules) policy page prior to publishing.
+- Listings with borderline risk scores ($35 \le \text{Risk} < 75$) or category discrepancies are placed into a **Pending Review** status, preventing them from appearing in public search until manually approved by an administrator.
+- Blatant violations ($\text{Risk} \ge 75$) are immediately rejected with actionable, non-revealing feedback for the seller.
+
+### 4. Community Reporting & Rate Limiting
+- **8 Standardized Report Categories**: Prohibited item, Illegal item, Inappropriate content, Scam or fraud, Counterfeit item, Misleading information, Dangerous item, and Other.
+- **Anti-Spam Throttling**: Limits listing submissions, duplicate ad creation within 5-minute windows, and rapid-fire report submission.
+
+### 5. Admin Moderation Console (`/admin`)
+- Accessible only to authorized administrators via server-side session and database RLS checks.
+- Three dedicated queues:
+  - **Pending Approvals Queue**: Live review of auto-flagged ads with 1-click Approve or Reject.
+  - **Community Reports Queue**: Prioritized view of buyer-reported listings with reported reason, detail, and Resolve actions.
+  - **User Suspension System**: Admin ability to suspend bad actors, instantly revoking their active listings and banning future uploads.
+
+---
+
+## 👨‍💻 About the Founder
+
+Bazaar was created and developed by **Harsh Sisodia**, a 15-year-old developer and entrepreneur who enjoys building modern websites and turning ideas into useful tools for everyone.
+
+- **Founder**: Harsh Sisodia
+- **Gaming Platform**: [GameRank (gamerank-one.vercel.app)](https://gamerank-one.vercel.app)
+- **Instagram**: [@hxrsh_s2k14](https://instagram.com/hxrsh_s2k14)
+- **About Page**: Explore our story at [`/about`](/about)
 
 ---
 
@@ -112,7 +158,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 1. Push your repository to **GitHub**:
    ```bash
    git add .
-   git commit -m "feat: complete modern marketplace website"
+   git commit -m "feat: complete modern marketplace with content safety"
    git branch -M main
    git remote add origin https://github.com/<your-username>/bazaar-marketplace.git
    git push -u origin main
@@ -124,15 +170,6 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase public anon key
    - `NEXT_PUBLIC_SITE_URL`: Your Vercel production URL (e.g. `https://bazaar-marketplace.vercel.app`)
 5. Click **Deploy**. Vercel will build and publish your marketplace in under a minute!
-
----
-
-## 🔒 Security Best Practices Implemented
-
-- **No Service Role Keys in Frontend**: Only public anon keys are exposed via `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-- **Database-Level Authorization**: Server-side Row Level Security (RLS) guarantees a user cannot modify or delete other sellers' listings even if they manipulate API calls.
-- **Client-Side Sanitization**: Image uploads enforce size restrictions (<5MB) and mime-type whitelisting (`image/jpeg`, `image/png`, `image/webp`).
-- **Fraud Prevention**: Explicit confirmation modals with safety tips warn buyers never to send OTPs or money in advance before calling sellers.
 
 ---
 
